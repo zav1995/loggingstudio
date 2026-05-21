@@ -1,9 +1,9 @@
 # PRD — Logging Studio MVP
 
-**Status:** Draft v0.2 (MVP scope)
+**Status:** Draft v0.4 (MVP scope)
 **Owner:** Xav
 **Last updated:** 21 May 2026
-**Decision context:** Operated by ScorePlay · standalone SKU · manual + XML ingest only · local-first stack to validate before productizing
+**Decision context:** Operated by ScorePlay · standalone SKU · manual + XML ingest only · local-first stack to validate before productizing · **backend in Go (Gin + pgx + Postgres) to align with ScorePlay's services for eventual merge**
 
 ---
 
@@ -15,7 +15,7 @@ Build the smallest possible Logging Studio that proves the model: humans logging
 
 ## 2. Data model
 
-Five entities. SQLite, persisted to a Docker volume.
+Five entities. Postgres, persisted to a Docker volume.
 
 ### 2.1 `Log`
 
@@ -35,13 +35,17 @@ No state machine, no confidence, no description field, no ontology version. Just
 ### 2.2 `Media`
 
 ```
-id              string (provided as input to the program — likely a ScorePlay asset id)
-hls_url         string (provided as input)
-label           string (human-readable, optional, defaults to id)
-created_at      timestamp
+id                string (provided as input to the program — likely a ScorePlay asset id)
+hls_url           string (provided as input)
+started_at_tc     string (provided as input — SMPTE timecode HH:MM:SS:FF representing the wall-clock timecode at which the stream/file starts)
+frame_rate        integer (default 25; needed to interpret started_at_tc and convert to ms)
+label             string (human-readable, optional, defaults to id)
+created_at        timestamp
 ```
 
 Provided at program start. The program is launched against one media. Multiple media can coexist in the DB across runs.
+
+**Note on `started_at_tc`:** the timecode anchor is what makes wall-clock-stamped ingest data (like the RG XML's `TC` field) line up with the HLS stream. Every offset stored in the database is in milliseconds from media start (i.e., from `started_at_tc`). Conversion from any external broadcast timecode happens at the edges (interpreter input, UI display).
 
 ### 2.3 `Tag` and `TagGroup`
 
@@ -99,9 +103,12 @@ A parser is a saved, named transformation from a foreign payload into our `Log` 
 The program is launched with:
 - `media_id` (string)
 - `hls_url` (string)
+- `started_at_tc` (string, SMPTE HH:MM:SS:FF — the broadcast timecode of the first frame of the stream)
+- `frame_rate` (integer, defaults to 25)
 
 On launch:
-- If the media doesn't exist in the DB, it's created.
+- If the media doesn't exist in the DB, it's created from these inputs.
+- If it does exist, the inputs must match what's stored (or the user is prompted to override / re-anchor — open question, see §9).
 - The UI opens with the player loaded on the HLS stream and the existing logs for that media (if any) on the timeline.
 
 ### 3.2 Manual logging
@@ -121,7 +128,6 @@ On launch:
 - Pressing `I` sets in-point, `O` sets out-point, `Enter` commits.
 - Multi-tag: while a log is in progress, pressing more hotkeys adds tags.
 - `Esc` discards the in-progress log.
-- "Quick-fire" mode: a single hotkey press immediately creates a 5-second log (configurable per tag — default duration per tag). Useful when working live and you don't want to bother with in/out.
 
 **Tag group + tag definition UI**
 - A dedicated "Tags" view inside the app, not a separate config file.
@@ -165,18 +171,20 @@ The compiled output is JSON, runs through a small interpreter. Example for the R
     { "path": "UserFields/UserField[Header='Court']/text()", "op": "eq", "value": "Court 13" }
   ],
   "mapping": {
-    "offset_in":  { "type": "timecode_to_ms", "path": "TC", "frame_rate": 25, "minus_ms": 5000 },
-    "offset_out": { "type": "timecode_to_ms", "path": "TC", "frame_rate": 25, "plus_ms":  2000 },
+    "offset_in":  { "type": "timecode_to_ms", "path": "TC", "minus_ms": 5000 },
+    "offset_out": { "type": "timecode_to_ms", "path": "TC", "plus_ms":  2000 },
     "tags":       { "type": "tag_lookup_by_name", "path": "Keywords/Keyword[@Type='Keyword']" },
     "source":     { "type": "literal", "value": "ingest:rg_xml" }
   }
 }
 ```
 
+The interpreter reads `frame_rate` and `started_at_tc` from the `Media` row at runtime; parsers don't carry those.
+
 The interpreter supports a small set of operations:
 - `literal` — fixed value
 - `xpath` / `jsonpath` — extract from payload
-- `timecode_to_ms` — parse SMPTE timecode with frame rate, optional offset
+- `timecode_to_ms` — parse SMPTE timecode against the current media's `started_at_tc` and `frame_rate`, optional offset
 - `tag_lookup_by_name` — resolve tag names to tag ids, creating tags as needed (configurable: strict / lenient)
 - `concat`, `lower`, `trim`, `regex_extract` — small string ops
 
@@ -193,11 +201,11 @@ Live ingestion is just "the watch folder happens to receive files continuously w
 
 ### 3.4 Re-using the example XML — concrete expected outcome
 
-For the attached file (`LOG_20260518_RG_1T_QD069_..._13_P1_CL_...xml`):
+For the attached file (`LOG_20260518_RG_1T_QD069_..._13_P1_CL_...xml`), assuming a session launched with `started_at_tc = "17:30:00:00"` and `frame_rate = 25`:
 
 - `Court = "Court 13"` → passes filter (if user configured for Court 13).
-- `TC = "17:35:00:08"` at 25fps → 63,300,320ms wall-clock. With `minus_ms: 5000` and `plus_ms: 2000`, the resulting `offset_in / offset_out` are relative to wall-clock, not media start. **This is a real problem** — see §6.1 below for how we resolve it.
-- `Keywords/Keyword[@Type='Keyword']` → `["Backhand", "Volley", "Break point", "Game point", "Winner", "Advantage side"]`. These get looked up against existing tags; any missing get created (in a "Imported tags" group).
+- `TC = "17:35:00:08"` minus `started_at_tc = "17:30:00:00"` at 25fps → `5 min + 0 sec + 8 frames = 300,000 + 320 = 300,320 ms` from media start. With `minus_ms: 5000` and `plus_ms: 2000`, `offset_in = 295,320`, `offset_out = 302,320`.
+- `Keywords/Keyword[@Type='Keyword']` → `["Backhand", "Volley", "Break point", "Game point", "Winner", "Advantage side"]`. These get looked up against existing tags; any missing get created (in an "Imported tags" group).
 - One `Log` row inserted, source = `ingest:rg_xml`.
 
 ---
@@ -246,60 +254,73 @@ For the attached file (`LOG_20260518_RG_1T_QD069_..._13_P1_CL_...xml`):
 
 Three containers in `docker-compose.yml`:
 
-- **`db`** — SQLite mounted to a named volume `logging_db_data`. (Or `better-sqlite3` in the backend container with a mounted volume — simpler, no separate service. Recommended: skip the separate db container, use SQLite embedded in the backend, persist via volume.)
-- **`backend`** — Node.js + TypeScript + Fastify. Exposes REST + WebSocket. Owns SQLite. Runs the watch folder loop. Volumes: `./watch:/watch`, `./db:/db`.
+- **`postgres`** — Postgres 16 with `pgvector` extension installed (unused at MVP, available for Phase 2). Volume-mounted for persistence.
+- **`backend`** — Go 1.22+ with Gin (HTTP), pgx/v5 (Postgres driver + pool), sqlc-generated query layer (or hand-written if simpler at MVP). Exposes REST + Server-Sent Events. Runs the watch folder loop. Volumes: `./watch:/watch`. Connects to `postgres` over the Docker network.
 - **`frontend`** — Vite + React + Mantine. Served as a static build behind a tiny nginx, or just the Vite dev server in dev. Talks to backend on `localhost:8080`.
 
 ### 5.2 Backend modules
 
 ```
 backend/
-  src/
-    db/                  # SQLite schema + migrations (drizzle or kysely)
-    models/              # Log, Media, Tag, TagGroup, Session, IngestParser
-    routes/
-      logs.ts            # CRUD
-      media.ts           # init + lookup
-      tags.ts            # CRUD
-      sessions.ts        # CRUD
-      parsers.ts         # CRUD, test-run, prompt-compile
+  cmd/
+    server/
+      main.go              # Gin boot, wiring, graceful shutdown
+  internal/
+    db/
+      migrations/          # SQL files, managed by golang-migrate
+      queries/             # SQL files for sqlc
+      sqlc.yaml            # sqlc config
+      generated/           # sqlc output — committed
+    domain/                # Log, Media, Tag, TagGroup, Session, IngestParser structs
+    handlers/
+      logs.go              # CRUD
+      media.go             # init + lookup
+      tags.go              # CRUD
+      sessions.go          # CRUD
+      parsers.go           # CRUD, test-run, prompt-compile
+      events.go            # SSE stream
     ingest/
-      watcher.ts         # file watch loop
-      interpreter.ts     # runs a compiled parser against a payload
-      compiler.ts        # calls LLM to compile prompt → parser JSON
-    ws.ts                # WebSocket fanout for ingest events
+      watcher.go           # fsnotify-based file watch loop
+      interpreter.go       # runs a compiled parser against a payload
+      compiler.go          # calls Anthropic API to compile prompt → parser JSON
+    validation/            # struct validators (go-playground/validator)
+  go.mod
+  go.sum
+  Dockerfile
 ```
 
 ### 5.3 LLM-for-parser-compilation
 
-Only used inside the Parsers view when the user clicks "compile from prompt". One Claude API call. Output: validated JSON conforming to the parser schema. The result is shown to the user before saving so they can edit it if the LLM got it wrong.
+Only used inside the Parsers view when the user clicks "compile from prompt". One Anthropic API call from Go (via `anthropic-sdk-go` or direct HTTP). Output: JSON validated against the parser schema (structural validation in Go — no Zod equivalent, so a hand-written validator that mirrors the canonical JSON schema). Result is shown to the user before saving so they can edit it if the LLM got it wrong.
 
-Cost is negligible because it's bounded to setup time, not log-time. Per your requirement: no LLM in the runtime path.
+Cost is negligible because it's bounded to setup time, not log-time. Per the core requirement: no LLM in the runtime path.
 
 ### 5.4 Why this stack
 
-- SQLite + Node is the lowest-friction "I want to ship and iterate today" stack.
-- Mantine looks good immediately without design work.
-- File watcher in Node is trivial (`chokidar`).
+- **Go + Gin + pgx aligns with ScorePlay's existing services**, so a future merge into the main platform is a refactor, not a rewrite.
+- **Postgres now** means zero database migration when this MVP merges with ScorePlay infrastructure, and pgvector is available for the Phase 2 AI work without provisioning anything new.
+- **sqlc** gives typed query results without GORM's runtime cost or hidden behavior — same pattern as ScorePlay's other services.
+- **fsnotify** is the standard Go file watcher, equivalent to chokidar in Node.
+- **Mantine + Vite** unchanged on the frontend — fastest path to a polished UI for a single developer.
 - Everything is one `docker compose up` away.
+
+### 5.5 Cross-language type sharing
+
+Backend and frontend no longer share TypeScript types (Go on backend). The parser JSON schema is the canonical interface and is defined as a JSON Schema document committed at `shared/parser-schema.json`. Both sides validate against it: Go via a code-generated validator (or hand-written struct + validator tags), TypeScript via Zod schema in `frontend/src/lib/parser-schema.ts`. Drift is prevented by treating `shared/parser-schema.json` as the source of truth — any change to it requires updating both sides in the same PR.
 
 ---
 
 ## 6. Known issues to resolve before coding
 
-### 6.1 Wall-clock vs media-relative time
+### 6.1 Wall-clock vs media-relative time — RESOLVED
 
 The XML provides `TC = 17:35:00:08`, which is broadcast wall-clock, not "milliseconds from start of the HLS stream". The HLS stream's "start" is whenever it started; logs are stored as `offset_in` from media start.
 
-Two options:
-- **(a)** Store media start wall-clock when initializing the media (or read from HLS PROGRAM-DATE-TIME tags), then `offset_in = TC - media_start_wallclock`.
-- **(b)** Change the schema to store wall-clock timestamps instead of offsets for ingested logs. Less clean.
+**Resolution:** `started_at_tc` (SMPTE HH:MM:SS:FF) is supplied as a third launch input at session start, alongside `media_id` and `hls_url`, and stored on `Media`. The interpreter's `timecode_to_ms` op computes `offset_in = (TC - started_at_tc) in ms`, using the media's `frame_rate` to convert frames to milliseconds. PROGRAM-DATE-TIME tags in the HLS playlist are not relied on at MVP — the operator supplies the timecode explicitly, which is unambiguous and matches how the studio is operated in practice (loggers know when the stream starts).
 
-**Recommendation: (a).** Add `started_at_wallclock` field to `Media`. The program input becomes `media_id + hls_url + started_at_wallclock` (or auto-read from PROGRAM-DATE-TIME). The interpreter's `timecode_to_ms` op converts `TC - started_at_wallclock`.
+### 6.2 Frame rate — RESOLVED
 
-### 6.2 Frame rate
-
-Implicit in `TC = 17:35:00:08` is "what's the 25th of a second worth in ms?" For RG it's 25fps. We need frame rate either per-media or per-parser. Per-parser is simpler (parsers are sport/source-specific anyway).
+`frame_rate` is supplied at session start and stored on `Media` (defaulting to 25). The interpreter and the SMPTE display layer both read from `Media.frame_rate`. Parsers no longer carry their own frame_rate field — the frame rate is a property of the source media, not of the parser.
 
 ### 6.3 Tag auto-creation policy
 
@@ -326,7 +347,7 @@ The attached XML appears to be one point in a match. A real session would have h
 - Auto-segmentation engine (the "cut 16h into matches" feature).
 - AI logging (transcript or visual).
 - Export to FCPXML / AAF / EDL.
-- Cloud architecture / Kubernetes / Postgres / Kafka.
+- Cloud architecture / Kubernetes / Kafka.
 - ScorePlay API integration beyond the `media_id` reference.
 - Customer-facing UI.
 
@@ -343,14 +364,18 @@ logging-studio/
   docker-compose.yml
   backend/
     Dockerfile
-    package.json
-    src/...
+    go.mod
+    go.sum
+    cmd/server/main.go
+    internal/...
   frontend/
     Dockerfile
     package.json
     src/...
-  watch/                 # mounted into backend, drop XMLs here
-  db/                    # mounted into backend, SQLite lives here
+  shared/
+    parser-schema.json     # canonical parser JSON schema, source of truth
+  watch/                   # mounted into backend, drop XMLs here
+  pgdata/                  # mounted into postgres, db lives here
   README.md
 ```
 
@@ -362,6 +387,6 @@ logging-studio/
 
 1. **HLS stream source.** For dev, where do we get a test HLS stream? An old RG26 archive? A public test stream? Need this to validate hls.js + frame stepping behavior.
 2. **Brand colors.** What's the canonical primary/accent for ScorePlay product UI? (Pulling from brand guide if you want me to commit on it.)
-3. **Player position.** The launch input — is `media_id` always a ScorePlay asset id (so we can later push logs back via API), or is it free-form? Doesn't matter for MVP but determines whether we add a "send to ScorePlay" button later.
+3. **`media_id` provenance.** Is `media_id` always a ScorePlay asset id (so we can later push logs back via API), or is it free-form? Doesn't matter for MVP but determines whether we add a "send to ScorePlay" button later.
 4. **Watch folder file matching to parsers.** Simplest rule for MVP: one parser per watch folder. Folder `watch/rg_xml/` → RG parser. Folder `watch/stats_perform/` → Stats Perform parser. Confirm this is acceptable vs more sophisticated content sniffing.
-5. **Frame rate per media or per parser.** Confirm per-parser is fine for MVP.
+5. **Re-launching against an existing media with different launch inputs.** If a user re-opens a media with a different `started_at_tc` or `frame_rate` than what was stored on first launch, what should happen? Options: (a) refuse and force them to delete the media, (b) prompt to overwrite (re-anchor — would shift all existing offsets), (c) prompt to create a new media id. Recommend (c) for safety; needs a final call.
