@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Log Version="2.0.1" GUID="8704e248-6d48-4f7f-abd7-e541d37359b7" DBVersion="4" ThirdParty_ID="QD069-116" LOGSHEET_GUID="64357208-a15b-4ee1-a540-21b115e66350" ThirdParty_LOGSHEET_ID="QD069" EVS_LOGSHEET_ID="452" DB_GUID="780c73b5-96fa-4f43-bca1-fd0c01c6ecac">
+  <Date>18-May-2026</Date>
+  <TC>17:35:00:08 </TC>
+  <DateUser>18-May-2026</DateUser>
+  <TCUser>17:35:00:08 </TCUser>
+  <TCTable>0</TCTable>
+  <Description />
+  <TapeID />
+  <InterestLevel>0</InterestLevel>
+  <Colour>4</Colour>
+  <RGBColour>#9B9BFF</RGBColour>
+  <AvidColour>#0000FF</AvidColour>
+  <VideoFormat>1</VideoFormat>
+  <Keywords>
+    <Keyword Type="Participant">T.PROZOROVA (---)</Keyword>
+    <Keyword Type="Keyword">Backhand</Keyword>
+    <Keyword Type="Keyword">Volley</Keyword>
+    <Keyword Type="Keyword">Break point</Keyword>
+    <Keyword Type="Keyword">Game point</Keyword>
+    <Keyword Type="Keyword">Winner</Keyword>
+    <Keyword Type="Keyword">Advantage side</Keyword>
+  </Keywords>
+  <Owner>automatic_logger</Owner>
+  <AssociatedClips>
+    <AssociatedClip UmID=";zqKWwMc" />
+    <AssociatedClip UmID=";zqKWwNt" />
+  </AssociatedClips>
+  <AutomaticKeywords>
+    <AutomaticKeyword Header="Content Type" Type="COMBO" Description="">All Matches</AutomaticKeyword>
+    <AutomaticKeyword Header="Logger" Type="COMBO" Description="">Roland-Garros Metadata Importer</AutomaticKeyword>
+    <AutomaticKeyword Header="Score" Type="TEXT" Description="">40/40</AutomaticKeyword>
+    <AutomaticKeyword Header="Point Description" Type="TEXT" Description="">Game point</AutomaticKeyword>
+    <AutomaticKeyword Header="Score Summary" Type="TEXT" Description="">2-2 40/40</AutomaticKeyword>
+    <AutomaticKeyword Header="Server" Type="TEXT" Description="">Tatiana PROZOROVA</AutomaticKeyword>
+    <AutomaticKeyword Header="Serve Description" Type="TEXT" Description="">First serve from Advantage side</AutomaticKeyword>
+    <AutomaticKeyword Header="Game" Type="MEMO" Description="">2-2</AutomaticKeyword>
+    <AutomaticKeyword Header="Rally Count" Type="TEXT" Description="">7</AutomaticKeyword>
+    <AutomaticKeyword Header="Shot Count" Type="TEXT" Description="">7</AutomaticKeyword>
+    <AutomaticKeyword Header="Set" Type="TEXT" Description="">Set 2</AutomaticKeyword>
+    <AutomaticKeyword Header="Strategy" Type="TEXT" Description="">161, Backhand, Volley</AutomaticKeyword>
+  </AutomaticKeywords>
+  <UserFields>
+    <UserField Header="Source" Type="COMBO" Description="">Interface XML 2.14</UserField>
+    <UserField Header="Round" Type="COMBO" Description="">First Round</UserField>
+    <UserField Header="Event" Type="COMBO" Description="">Qualifications Women's Singles</UserField>
+    <UserField Header="Court" Type="COMBO" Description="">Court 13</UserField>
+    <UserField Header="Notes" Type="MEMO" Description="" />
+  </UserFields>
+</Log>
