@@ -57,3 +57,5 @@
 {"id":"int-0ccd5f66","kind":"field_change","created_at":"2026-05-22T09:53:28.675913Z","actor":"xavier","issue_id":"loggingstudio-rzu","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
 {"id":"int-68164645","kind":"field_change","created_at":"2026-05-22T09:59:49.882853Z","actor":"xavier","issue_id":"loggingstudio-jvr","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-a2bfdd95","kind":"field_change","created_at":"2026-05-22T10:05:04.692214Z","actor":"xavier","issue_id":"loggingstudio-jvr","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
+{"id":"int-fc742efb","kind":"field_change","created_at":"2026-05-22T12:02:52.075843Z","actor":"xavier","issue_id":"loggingstudio-wo5","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-cf038356","kind":"field_change","created_at":"2026-05-22T12:06:32.439841Z","actor":"xavier","issue_id":"loggingstudio-wo5","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
