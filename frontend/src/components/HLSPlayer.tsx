@@ -118,6 +118,24 @@ export function HLSPlayer({ src, startedAtTC, frameRate }: Props) {
     else v.pause();
   }, []);
 
+  // Stable setIn/setOut that read currentTime straight off the video element
+  // — that lets the keydown effect depend on them without re-registering on
+  // every rAF tick (which would happen if we closed over the currentMs state).
+  const setIn = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setLoop((p) => ({ ...p, inMs: v.currentTime * 1000 }));
+  }, []);
+  const setOut = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setLoop((p) => ({ ...p, outMs: v.currentTime * 1000 }));
+  }, []);
+  const clearLoop = useCallback(
+    () => setLoop({ inMs: null, outMs: null, enabled: false }),
+    [],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -168,18 +186,23 @@ export function HLSPlayer({ src, startedAtTC, frameRate }: Props) {
           v.pause();
           v.currentTime = v.currentTime + (e.shiftKey ? 5 : frameSec);
           break;
+        case 'i':
+        case 'I':
+          e.preventDefault();
+          setIn();
+          break;
+        case 'o':
+        case 'O':
+          e.preventDefault();
+          setOut();
+          break;
         default:
           return;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [frameRate, togglePlay]);
-
-  const setIn = () => setLoop((p) => ({ ...p, inMs: currentMs }));
-  const setOut = () => setLoop((p) => ({ ...p, outMs: currentMs }));
-  const clearLoop = () =>
-    setLoop({ inMs: null, outMs: null, enabled: false });
+  }, [frameRate, togglePlay, setIn, setOut]);
 
   return (
     <Stack>
