@@ -41,6 +41,12 @@ func (s *Server) Register(r *gin.Engine) {
 	r.GET("/tags/:id", s.getTag)
 	r.PATCH("/tags/:id", s.updateTag)
 	r.DELETE("/tags/:id", s.deleteTag)
+
+	r.POST("/sessions", s.createSession)
+	r.GET("/sessions", s.listSessions)
+	r.GET("/sessions/:id", s.getSession)
+	r.PATCH("/sessions/:id", s.updateSession)
+	r.DELETE("/sessions/:id", s.deleteSession)
 }
 
 func (s *Server) getHealth(c *gin.Context) {
