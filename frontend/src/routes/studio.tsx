@@ -1,31 +1,38 @@
 import { useEffect, useState } from 'react';
 import { Badge, Card, Code, Group, Stack, Text, Title } from '@mantine/core';
 
-type HealthResponse = { ok: boolean; db: string; ts: string };
+import { ApiError, api } from '../api/client';
+import { healthSchema, type Health } from '../api/schemas';
+
 type HealthState =
   | { status: 'loading' }
-  | { status: 'ok'; data: HealthResponse }
+  | { status: 'ok'; data: Health }
   | { status: 'error'; message: string };
 
 export function Studio() {
   const [health, setHealth] = useState<HealthState>({ status: 'loading' });
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/health', { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as HealthResponse;
+    let cancelled = false;
+    api
+      .get('/health', healthSchema)
+      .then((data) => {
+        if (cancelled) return;
+        setHealth({ status: 'ok', data });
       })
-      .then((data) => setHealth({ status: 'ok', data }))
       .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setHealth({
-          status: 'error',
-          message: err instanceof Error ? err.message : 'unknown error',
-        });
+        if (cancelled) return;
+        const message =
+          err instanceof ApiError
+            ? `${err.message}${err.detail ? ` — ${err.detail}` : ''}`
+            : err instanceof Error
+              ? err.message
+              : 'unknown error';
+        setHealth({ status: 'error', message });
       });
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const dbOK = health.status === 'ok' && health.data.db === 'ok';
