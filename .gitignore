@@ -13,6 +13,7 @@ db/*.db
 db/*.db-journal
 db/*.db-shm
 db/*.db-wal
+pgdata/
 watch/processed/
 watch/rejected/
 
