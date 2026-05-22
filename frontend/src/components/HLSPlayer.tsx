@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { ActionIcon, Badge, Code, Group, Stack, Switch, Text } from '@mantine/core';
 import Hls from 'hls.js';
 
@@ -8,6 +15,13 @@ type Props = {
   src: string;
   startedAtTC: string;
   frameRate: number;
+  // Called on every rAF tick with the player's currentMs + total durationMs.
+  onTimeUpdate?: (currentMs: number, durationMs: number) => void;
+};
+
+export type HLSPlayerHandle = {
+  seek: (ms: number) => void;
+  currentMs: () => number;
 };
 
 type LoopRegion = {
@@ -16,7 +30,10 @@ type LoopRegion = {
   enabled: boolean;
 };
 
-export function HLSPlayer({ src, startedAtTC, frameRate }: Props) {
+export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
+  { src, startedAtTC, frameRate, onTimeUpdate },
+  forwardedRef,
+) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [currentMs, setCurrentMs] = useState(0);
@@ -86,17 +103,37 @@ export function HLSPlayer({ src, startedAtTC, frameRate }: Props) {
     const tick = () => {
       const v = videoRef.current;
       if (v) {
-        setCurrentMs(v.currentTime * 1000);
+        const ms = v.currentTime * 1000;
+        setCurrentMs(ms);
+        let durMs = 0;
         if (!Number.isNaN(v.duration) && v.duration !== Infinity) {
-          setDurationMs(v.duration * 1000);
+          durMs = v.duration * 1000;
+          setDurationMs(durMs);
         }
         setPlaying(!v.paused);
+        if (onTimeUpdate) onTimeUpdate(ms, durMs);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [onTimeUpdate]);
+
+  // Imperative handle so the Studio can seek / read currentMs.
+  useImperativeHandle(
+    forwardedRef,
+    () => ({
+      seek: (ms: number) => {
+        const v = videoRef.current;
+        if (v) v.currentTime = Math.max(0, ms / 1000);
+      },
+      currentMs: () => {
+        const v = videoRef.current;
+        return v ? v.currentTime * 1000 : 0;
+      },
+    }),
+    [],
+  );
 
   // Loop-region enforcement.
   useEffect(() => {
@@ -266,4 +303,4 @@ export function HLSPlayer({ src, startedAtTC, frameRate }: Props) {
       )}
     </Stack>
   );
-}
+});
