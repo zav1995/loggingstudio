@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scoreplay.io/loggingstudio/parser-schema.json",
+  "title": "Logging Studio compiled parser",
+  "description": "Declarative transformation from a foreign sidecar payload (XML or JSON) into Log records. The interpreter reads frame_rate and started_at_tc from the current Media at runtime; parsers never carry those.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["match", "mapping"],
+  "properties": {
+    "match": { "const": "Log" },
+    "filters": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/filterRule" },
+      "default": []
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset_in", "tags", "source"],
+      "properties": {
+        "offset_in":  { "$ref": "#/$defs/mappingRule" },
+        "offset_out": { "$ref": "#/$defs/mappingRule" },
+        "tags":       { "$ref": "#/$defs/mappingRule" },
+        "source":     { "$ref": "#/$defs/mappingRule" }
+      }
+    },
+    "tag_lookup_mode": {
+      "description": "Behavior when a tag name is not found. lenient creates a tag in an 'Imported' group; strict rejects the log.",
+      "enum": ["strict", "lenient"],
+      "default": "lenient"
+    }
+  },
+  "$defs": {
+    "filterRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op", "value"],
+      "properties": {
+        "path":  { "type": "string", "minLength": 1 },
+        "op":    { "enum": ["eq", "neq", "contains", "matches"] },
+        "value": { "type": "string" }
+      }
+    },
+    "mappingRule": {
+      "oneOf": [
+        { "$ref": "#/$defs/opLiteral" },
+        { "$ref": "#/$defs/opXPath" },
+        { "$ref": "#/$defs/opJSONPath" },
+        { "$ref": "#/$defs/opTimecodeToMS" },
+        { "$ref": "#/$defs/opTagLookupByName" },
+        { "$ref": "#/$defs/opConcat" },
+        { "$ref": "#/$defs/opLower" },
+        { "$ref": "#/$defs/opTrim" },
+        { "$ref": "#/$defs/opRegexExtract" }
+      ]
+    },
+    "opLiteral": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type":  { "const": "literal" },
+        "value": true
+      }
+    },
+    "opXPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "xpath" },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "opJSONPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "jsonpath" },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "opTimecodeToMS": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type":     { "const": "timecode_to_ms" },
+        "path":     { "type": "string", "minLength": 1 },
+        "minus_ms": { "type": "integer", "minimum": 0 },
+        "plus_ms":  { "type": "integer", "minimum": 0 }
+      }
+    },
+    "opTagLookupByName": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "tag_lookup_by_name" },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "opConcat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "parts"],
+      "properties": {
+        "type":      { "const": "concat" },
+        "parts":     {
+          "type": "array",
+          "items": { "$ref": "#/$defs/mappingRule" },
+          "minItems": 1
+        },
+        "separator": { "type": "string" }
+      }
+    },
+    "opLower": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type":  { "const": "lower" },
+        "value": { "$ref": "#/$defs/mappingRule" }
+      }
+    },
+    "opTrim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type":  { "const": "trim" },
+        "value": { "$ref": "#/$defs/mappingRule" }
+      }
+    },
+    "opRegexExtract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value", "pattern"],
+      "properties": {
+        "type":    { "const": "regex_extract" },
+        "value":   { "$ref": "#/$defs/mappingRule" },
+        "pattern": { "type": "string", "minLength": 1 },
+        "group":   { "type": "integer", "minimum": 0, "default": 0 }
+      }
+    }
+  }
+}
