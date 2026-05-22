@@ -8,12 +8,16 @@ const API_BASE = '/api';
 export class ApiError extends Error {
   readonly status: number;
   readonly detail?: string;
+  // body carries any additional fields the backend returned alongside
+  // {error, detail} — useful for 409 conflicts that include the stored row.
+  readonly body?: unknown;
 
-  constructor(status: number, message: string, detail?: string) {
+  constructor(status: number, message: string, detail?: string, body?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.detail = detail;
+    this.body = body;
   }
 }
 
@@ -34,7 +38,7 @@ async function request<T>(path: string, options: RequestOptions<T> = {}): Promis
   });
 
   if (!res.ok) {
-    let errorBody: { error?: string; detail?: string } = {};
+    let errorBody: { error?: string; detail?: string } & Record<string, unknown> = {};
     try {
       errorBody = (await res.json()) as typeof errorBody;
     } catch {
@@ -44,6 +48,7 @@ async function request<T>(path: string, options: RequestOptions<T> = {}): Promis
       res.status,
       errorBody.error ?? `HTTP ${res.status}`,
       errorBody.detail,
+      errorBody,
     );
   }
 
