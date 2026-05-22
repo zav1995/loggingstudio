@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zav1995/loggingstudio/backend/internal/db"
+	"github.com/zav1995/loggingstudio/backend/internal/events"
 	"github.com/zav1995/loggingstudio/backend/internal/handlers"
 )
 
@@ -45,7 +46,7 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	handlers.New(pool).Register(r)
+	handlers.New(pool, events.New()).Register(r)
 
 	srv := &http.Server{
 		Addr:              ":8080",

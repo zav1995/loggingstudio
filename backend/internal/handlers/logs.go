@@ -10,6 +10,7 @@ import (
 
 	queries "github.com/zav1995/loggingstudio/backend/internal/db/generated"
 	"github.com/zav1995/loggingstudio/backend/internal/domain"
+	"github.com/zav1995/loggingstudio/backend/internal/events"
 )
 
 type createLogRequest struct {
@@ -66,7 +67,9 @@ func (s *Server) createLog(c *gin.Context) {
 		jsonError(c, http.StatusInternalServerError, "create failed", err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, logRowToDomain(row))
+	created := logRowToDomain(row)
+	s.broker.Publish(events.Event{Type: "log.created", Payload: created})
+	c.JSON(http.StatusCreated, created)
 }
 
 func (s *Server) listLogs(c *gin.Context) {
@@ -173,7 +176,9 @@ func (s *Server) updateLog(c *gin.Context) {
 		jsonError(c, http.StatusInternalServerError, "update failed", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, logRowToDomain(row))
+	updated := logRowToDomain(row)
+	s.broker.Publish(events.Event{Type: "log.updated", Payload: updated})
+	c.JSON(http.StatusOK, updated)
 }
 
 func (s *Server) deleteLog(c *gin.Context) {
@@ -186,6 +191,7 @@ func (s *Server) deleteLog(c *gin.Context) {
 		jsonError(c, http.StatusInternalServerError, "delete failed", err.Error())
 		return
 	}
+	s.broker.Publish(events.Event{Type: "log.deleted", Payload: gin.H{"id": c.Param("id")}})
 	c.Status(http.StatusNoContent)
 }
 

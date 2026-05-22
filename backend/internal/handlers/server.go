@@ -11,16 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	queries "github.com/zav1995/loggingstudio/backend/internal/db/generated"
+	"github.com/zav1995/loggingstudio/backend/internal/events"
 )
 
 // Server is the HTTP layer's dependency container.
 type Server struct {
-	pool *pgxpool.Pool
-	q    *queries.Queries
+	pool   *pgxpool.Pool
+	q      *queries.Queries
+	broker *events.Broker
 }
 
-func New(pool *pgxpool.Pool) *Server {
-	return &Server{pool: pool, q: queries.New(pool)}
+func New(pool *pgxpool.Pool, broker *events.Broker) *Server {
+	return &Server{pool: pool, q: queries.New(pool), broker: broker}
 }
 
 // Register attaches all routes onto the given engine.
@@ -53,6 +55,8 @@ func (s *Server) Register(r *gin.Engine) {
 	r.GET("/logs/:id", s.getLog)
 	r.PATCH("/logs/:id", s.updateLog)
 	r.DELETE("/logs/:id", s.deleteLog)
+
+	r.GET("/events", s.sseEvents)
 }
 
 func (s *Server) getHealth(c *gin.Context) {
