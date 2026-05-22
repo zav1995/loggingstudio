@@ -1,0 +1,50 @@
+name: loggingstudio
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: loggingstudio
+      POSTGRES_PASSWORD: loggingstudio
+      POSTGRES_DB: loggingstudio
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loggingstudio -d loggingstudio"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - loggingstudio
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgres://loggingstudio:loggingstudio@postgres:5432/loggingstudio?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./watch:/watch
+    ports:
+      - "8080:8080"
+    networks:
+      - loggingstudio
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    networks:
+      - loggingstudio
+
+networks:
+  loggingstudio:
+    name: loggingstudio
