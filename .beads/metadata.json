@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "loggingstudio",
+  "project_id": "e7e5fa1f-60ad-4e06-b1ff-9ad726ec012e"
+}
