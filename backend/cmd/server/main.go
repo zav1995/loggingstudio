@@ -11,11 +11,26 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/zav1995/loggingstudio/backend/internal/db"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
+	}
+
+	slog.Info("running migrations")
+	if err := db.RunMigrations(dbURL); err != nil {
+		slog.Error("migrations failed", "err", err)
+		os.Exit(1)
+	}
+	slog.Info("migrations applied")
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
