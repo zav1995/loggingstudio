@@ -21,6 +21,7 @@ import { Timeline } from '../components/Timeline';
 import { LogList, type LogFilters } from '../components/LogList';
 import { LogEditor } from '../components/LogEditor';
 import { TagPalette } from '../components/TagPalette';
+import { InProgressBar, type InProgressLog } from '../components/InProgressBar';
 
 const logListSchema = z.array(logSchema);
 const tagListSchema = z.array(tagSchema);
@@ -50,8 +51,16 @@ export function Studio() {
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [loadError, setLoadError] = useState('');
+  const [inProgress, setInProgress] = useState<InProgressLog | null>(null);
+  const [inProgressError, setInProgressError] = useState('');
 
   const playerRef = useRef<HLSPlayerHandle>(null);
+  // Refs let the global keydown handler read the freshest state without
+  // re-registering itself on every keystroke.
+  const inProgressRef = useRef<InProgressLog | null>(null);
+  inProgressRef.current = inProgress;
+  const editorOpenRef = useRef(editorOpen);
+  editorOpenRef.current = editorOpen;
 
   // Load media on activeMediaID change.
   useEffect(() => {
@@ -149,10 +158,45 @@ export function Studio() {
     [logs],
   );
 
-  // Backspace deletes the selected log (with confirm + input-focus guard).
+  // commitInProgress / discardInProgress are stable so the keydown effect
+  // doesn't need to re-register on every state change.
+  const commitInProgress = useCallback(async () => {
+    const ip = inProgressRef.current;
+    if (!ip || !activeMediaID) return;
+    setInProgressError('');
+    try {
+      await api.post('/logs', {
+        media_id: activeMediaID,
+        offset_in: ip.offsetIn,
+        offset_out: ip.offsetOut ?? undefined,
+        tags: ip.tags,
+        source: 'manual',
+      });
+      setInProgress(null);
+      await refreshAll();
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? `${err.message}${err.detail ? ` — ${err.detail}` : ''}`
+          : err instanceof Error
+            ? err.message
+            : 'commit failed';
+      setInProgressError(msg);
+    }
+  }, [activeMediaID, refreshAll]);
+
+  const discardInProgress = useCallback(() => {
+    setInProgress(null);
+    setInProgressError('');
+  }, []);
+
+  // Unified keyboard handler: Backspace (delete selected), tag hotkeys (start
+  // / add tag to in-progress), I/O (set in/out), Enter (commit), Esc
+  // (discard). Skipped while focus is in any input or the editor modal is
+  // open. Tag-hotkey matching is case-sensitive against the stored hotkey;
+  // I/O/Enter/Esc handlers also tolerate uppercase via explicit checks.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Backspace') return;
       const target = e.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
@@ -160,19 +204,77 @@ export function Studio() {
           return;
         }
       }
-      if (!selectedLogID || editorOpen) return;
-      e.preventDefault();
-      if (!confirm('Delete the selected log?')) return;
-      void api
-        .delete(`/logs/${selectedLogID}`)
-        .then(() => {
+      if (editorOpenRef.current) return;
+
+      // Backspace: delete selected log (no in-progress interference).
+      if (e.key === 'Backspace') {
+        if (!selectedLogID) return;
+        e.preventDefault();
+        if (!confirm('Delete the selected log?')) return;
+        void api.delete(`/logs/${selectedLogID}`).then(() => {
           setSelectedLogID(null);
           void refreshAll();
         });
+        return;
+      }
+
+      // Tag hotkey: starts or extends the in-progress log.
+      const tagHit = tags.find((t) => t.hotkey && t.hotkey === e.key);
+      if (tagHit && tagHit.id) {
+        e.preventDefault();
+        const nowMs = playerRef.current?.currentMs() ?? 0;
+        const tagID = tagHit.id;
+        setInProgressError('');
+        setInProgress((p) => {
+          if (!p) {
+            return { offsetIn: nowMs, offsetOut: null, tags: [tagID] };
+          }
+          if (p.tags.includes(tagID)) return p;
+          return { ...p, tags: [...p.tags, tagID] };
+        });
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      if (key === 'i') {
+        e.preventDefault();
+        const nowMs = playerRef.current?.currentMs() ?? 0;
+        setInProgressError('');
+        setInProgress((p) =>
+          p
+            ? { ...p, offsetIn: nowMs }
+            : { offsetIn: nowMs, offsetOut: null, tags: [] },
+        );
+        return;
+      }
+      if (key === 'o') {
+        e.preventDefault();
+        const nowMs = playerRef.current?.currentMs() ?? 0;
+        setInProgressError('');
+        setInProgress((p) =>
+          p
+            ? { ...p, offsetOut: nowMs }
+            : { offsetIn: nowMs, offsetOut: nowMs, tags: [] },
+        );
+        return;
+      }
+      if (e.key === 'Enter') {
+        if (!inProgressRef.current) return;
+        e.preventDefault();
+        void commitInProgress();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (!inProgressRef.current) return;
+        e.preventDefault();
+        discardInProgress();
+        return;
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedLogID, editorOpen, refreshAll]);
+  }, [tags, selectedLogID, refreshAll, commitInProgress, discardInProgress]);
 
   const onPlayerTimeUpdate = useCallback((ms: number, dur: number) => {
     setCurrentMs(ms);
@@ -241,6 +343,16 @@ export function Studio() {
               frameRate={media.data.frame_rate}
               onTimeUpdate={onPlayerTimeUpdate}
             />
+            {inProgress && (
+              <InProgressBar
+                log={inProgress}
+                tags={tags}
+                frameRate={media.data.frame_rate}
+                onCommit={commitInProgress}
+                onDiscard={discardInProgress}
+                error={inProgressError}
+              />
+            )}
             <Timeline
               logs={filteredLogs}
               tags={tags}

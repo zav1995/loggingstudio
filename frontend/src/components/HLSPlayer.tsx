@@ -223,23 +223,15 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
           v.pause();
           v.currentTime = v.currentTime + (e.shiftKey ? 5 : frameSec);
           break;
-        case 'i':
-        case 'I':
-          e.preventDefault();
-          setIn();
-          break;
-        case 'o':
-        case 'O':
-          e.preventDefault();
-          setOut();
-          break;
         default:
           return;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [frameRate, togglePlay, setIn, setOut]);
+    // I/O are reserved for the in-progress log keyboard handler in Studio
+    // (FE7) — the loop-region buttons still work via mouse click.
+  }, [frameRate, togglePlay]);
 
   return (
     <Stack>
@@ -291,9 +283,9 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
       </Group>
 
       <Text size="xs" c="dimmed">
-        Hotkeys: <Code>Space</Code> play/pause · <Code>J</Code>/<Code>K</Code>/<Code>L</Code> shuttle
-        (-2x/pause/+2x) · <Code>←</Code>/<Code>→</Code> frame step · <Code>Shift</Code>+arrows ±5s ·
-        <Code>I</Code>/<Code>O</Code> set loop in/out
+        Transport: <Code>Space</Code> play/pause · <Code>J</Code>/<Code>K</Code>/<Code>L</Code> shuttle
+        (-2x/pause/+2x) · <Code>←</Code>/<Code>→</Code> frame step · <Code>Shift</Code>+arrows ±5s.
+        Loop region: click the <Code>I</Code> / <Code>O</Code> buttons above.
       </Text>
 
       {error && (
