@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zav1995/loggingstudio/backend/internal/db"
 )
@@ -32,16 +33,17 @@ func main() {
 	}
 	slog.Info("migrations applied")
 
+	pool, err := pgxpool.New(context.Background(), dbURL)
+	if err != nil {
+		slog.Error("open pgx pool", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
-
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"ok": true,
-			"ts": time.Now().UTC().Format(time.RFC3339),
-		})
-	})
+	r.GET("/health", healthHandler(pool))
 
 	srv := &http.Server{
 		Addr:              ":8080",
@@ -66,5 +68,27 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("graceful shutdown failed", "err", err)
+	}
+}
+
+// healthHandler reports the backend's overall status plus a DB ping with a
+// short timeout. The endpoint always returns 200 — it's informational, not
+// gating: container orchestrators that need a hard gate should use their own
+// TCP/HTTP probe instead.
+func healthHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+
+		dbStatus := "ok"
+		if err := pool.Ping(ctx); err != nil {
+			dbStatus = err.Error()
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"ok": true,
+			"db": dbStatus,
+			"ts": time.Now().UTC().Format(time.RFC3339),
+		})
 	}
 }
