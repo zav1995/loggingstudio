@@ -2,6 +2,15 @@
 node_modules/
 .pnpm-store/
 
+# Yarn (Berry, node-modules linker — keep yarn.lock, ignore the rest)
+**/.yarn/*
+!**/.yarn/patches
+!**/.yarn/plugins
+!**/.yarn/releases
+!**/.yarn/sdks
+!**/.yarn/versions
+.pnp.*
+
 # Build outputs
 dist/
 build/

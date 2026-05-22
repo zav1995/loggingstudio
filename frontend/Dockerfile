@@ -3,11 +3,13 @@
 FROM node:20-alpine AS build
 WORKDIR /src
 
-COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN corepack enable
+
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN yarn install --immutable
 
 COPY . .
-RUN npm run build
+RUN yarn build
 
 FROM nginx:1.27-alpine
 COPY --from=build /src/dist /usr/share/nginx/html
