@@ -26,8 +26,21 @@ func New(pool *pgxpool.Pool) *Server {
 // Register attaches all routes onto the given engine.
 func (s *Server) Register(r *gin.Engine) {
 	r.GET("/health", s.getHealth)
+
 	r.POST("/media", s.createMedia)
 	r.GET("/media/:id", s.getMedia)
+
+	r.POST("/tag-groups", s.createTagGroup)
+	r.GET("/tag-groups", s.listTagGroups)
+	r.GET("/tag-groups/:id", s.getTagGroup)
+	r.PATCH("/tag-groups/:id", s.updateTagGroup)
+	r.DELETE("/tag-groups/:id", s.deleteTagGroup)
+
+	r.POST("/tags", s.createTag)
+	r.GET("/tags", s.listTags)
+	r.GET("/tags/:id", s.getTag)
+	r.PATCH("/tags/:id", s.updateTag)
+	r.DELETE("/tags/:id", s.deleteTag)
 }
 
 func (s *Server) getHealth(c *gin.Context) {
