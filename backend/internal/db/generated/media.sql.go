@@ -23,7 +23,7 @@ type CreateMediaParams struct {
 	Label       *string `json:"label"`
 }
 
-func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error) {
+func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Media, error) {
 	row := q.db.QueryRow(ctx, createMedia,
 		arg.ID,
 		arg.HlsUrl,
@@ -31,7 +31,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		arg.FrameRate,
 		arg.Label,
 	)
-	var i Medium
+	var i Media
 	err := row.Scan(
 		&i.ID,
 		&i.HlsUrl,
@@ -47,9 +47,9 @@ const getMedia = `-- name: GetMedia :one
 SELECT id, hls_url, started_at_tc, frame_rate, label, created_at FROM media WHERE id = $1
 `
 
-func (q *Queries) GetMedia(ctx context.Context, id string) (Medium, error) {
+func (q *Queries) GetMedia(ctx context.Context, id string) (Media, error) {
 	row := q.db.QueryRow(ctx, getMedia, id)
-	var i Medium
+	var i Media
 	err := row.Scan(
 		&i.ID,
 		&i.HlsUrl,
@@ -65,15 +65,15 @@ const listMedia = `-- name: ListMedia :many
 SELECT id, hls_url, started_at_tc, frame_rate, label, created_at FROM media ORDER BY created_at DESC
 `
 
-func (q *Queries) ListMedia(ctx context.Context) ([]Medium, error) {
+func (q *Queries) ListMedia(ctx context.Context) ([]Media, error) {
 	rows, err := q.db.Query(ctx, listMedia)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Medium
+	var items []Media
 	for rows.Next() {
-		var i Medium
+		var i Media
 		if err := rows.Scan(
 			&i.ID,
 			&i.HlsUrl,

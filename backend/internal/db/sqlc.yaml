@@ -11,3 +11,5 @@ sql:
         emit_json_tags: true
         emit_pointers_for_null_types: true
         emit_result_struct_pointers: false
+        rename:
+          medium: "Media"

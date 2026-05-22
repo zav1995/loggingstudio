@@ -30,7 +30,7 @@ type Log struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-type Medium struct {
+type Media struct {
 	ID          string             `json:"id"`
 	HlsUrl      string             `json:"hls_url"`
 	StartedAtTc string             `json:"started_at_tc"`
