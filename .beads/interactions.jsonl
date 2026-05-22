@@ -8,3 +8,5 @@
 {"id":"int-589ccd9e","kind":"field_change","created_at":"2026-05-22T07:41:10.363329Z","actor":"xavier","issue_id":"loggingstudio-7i3","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"merged into loggingstudio-bwj (Compose + wiring); seed split error"}}
 {"id":"int-a51f01db","kind":"field_change","created_at":"2026-05-22T07:46:34.516968Z","actor":"xavier","issue_id":"loggingstudio-sc0","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-98ff7526","kind":"field_change","created_at":"2026-05-22T07:47:29.413928Z","actor":"xavier","issue_id":"loggingstudio-sc0","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
+{"id":"int-b9280d53","kind":"field_change","created_at":"2026-05-22T07:52:26.622537Z","actor":"xavier","issue_id":"loggingstudio-tdb","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-1c81aea0","kind":"field_change","created_at":"2026-05-22T07:56:51.425496Z","actor":"xavier","issue_id":"loggingstudio-tdb","extra":{"field":"status","new_value":"closed","old_value":"in_progress"}}
