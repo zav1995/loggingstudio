@@ -68,8 +68,8 @@ export function LogEditor({
       await api.patch(
         `/logs/${log.id}`,
         {
-          offset_in: inMs,
-          offset_out: outMs ?? undefined,
+          offset_in: Math.round(inMs),
+          offset_out: outMs === null ? undefined : Math.round(outMs),
           tags: tagIds,
         },
         logSchema,

@@ -103,11 +103,13 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
     const tick = () => {
       const v = videoRef.current;
       if (v) {
-        const ms = v.currentTime * 1000;
+        // Whole-ms everywhere so downstream consumers (timeline, log editor,
+        // in-progress log) can send the values straight to the int64 backend.
+        const ms = Math.round(v.currentTime * 1000);
         setCurrentMs(ms);
         let durMs = 0;
         if (!Number.isNaN(v.duration) && v.duration !== Infinity) {
-          durMs = v.duration * 1000;
+          durMs = Math.round(v.duration * 1000);
           setDurationMs(durMs);
         }
         setPlaying(!v.paused);
@@ -120,6 +122,8 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
   }, [onTimeUpdate]);
 
   // Imperative handle so the Studio can seek / read currentMs.
+  // currentMs is rounded to whole ms — the backend's offset_in/offset_out are
+  // int64 and barf on the float that v.currentTime * 1000 naturally produces.
   useImperativeHandle(
     forwardedRef,
     () => ({
@@ -129,7 +133,7 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
       },
       currentMs: () => {
         const v = videoRef.current;
-        return v ? v.currentTime * 1000 : 0;
+        return v ? Math.round(v.currentTime * 1000) : 0;
       },
     }),
     [],
