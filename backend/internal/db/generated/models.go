@@ -39,6 +39,17 @@ type Media struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type RejectedIngestion struct {
+	ID         pgtype.UUID        `json:"id"`
+	Filename   string             `json:"filename"`
+	ParserID   pgtype.UUID        `json:"parser_id"`
+	ParserName string             `json:"parser_name"`
+	MediaID    *string            `json:"media_id"`
+	Reason     string             `json:"reason"`
+	RawPayload string             `json:"raw_payload"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type Session struct {
 	ID        pgtype.UUID        `json:"id"`
 	MediaID   string             `json:"media_id"`

@@ -62,6 +62,23 @@ func (q *Queries) GetTagGroup(ctx context.Context, id pgtype.UUID) (TagGroup, er
 	return i, err
 }
 
+const getTagGroupByName = `-- name: GetTagGroupByName :one
+SELECT id, name, color, display_order, created_at FROM tag_groups WHERE name = $1 LIMIT 1
+`
+
+func (q *Queries) GetTagGroupByName(ctx context.Context, name string) (TagGroup, error) {
+	row := q.db.QueryRow(ctx, getTagGroupByName, name)
+	var i TagGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Color,
+		&i.DisplayOrder,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listTagGroups = `-- name: ListTagGroups :many
 SELECT id, name, color, display_order, created_at FROM tag_groups
 ORDER BY display_order ASC, name ASC

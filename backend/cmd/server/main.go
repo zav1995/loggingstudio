@@ -14,8 +14,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zav1995/loggingstudio/backend/internal/db"
+	queries "github.com/zav1995/loggingstudio/backend/internal/db/generated"
 	"github.com/zav1995/loggingstudio/backend/internal/events"
 	"github.com/zav1995/loggingstudio/backend/internal/handlers"
+	"github.com/zav1995/loggingstudio/backend/internal/ingest"
 )
 
 func main() {
@@ -42,11 +44,30 @@ func main() {
 	}
 	defer pool.Close()
 
+	broker := events.New()
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	handlers.New(pool, broker).Register(r)
 
-	handlers.New(pool, events.New()).Register(r)
+	// Watcher runs in its own goroutine and shares the broker so its
+	// ingest.processed / ingest.rejected events ride the same SSE stream
+	// the HTTP layer publishes log mutations into.
+	watcher := &ingest.Watcher{
+		Queries:      queries.New(pool),
+		Broker:       broker,
+		WatchDir:     watchDirFromEnv(),
+		PollInterval: 2 * time.Second,
+	}
+	watcherCtx, cancelWatcher := context.WithCancel(context.Background())
+	defer cancelWatcher()
+	go func() {
+		slog.Info("starting watcher", "dir", watcher.WatchDir)
+		if err := watcher.Run(watcherCtx); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("watcher stopped", "err", err)
+		}
+	}()
 
 	srv := &http.Server{
 		Addr:              ":8080",
@@ -67,9 +88,17 @@ func main() {
 	<-stop
 
 	slog.Info("shutting down")
+	cancelWatcher()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("graceful shutdown failed", "err", err)
 	}
+}
+
+func watchDirFromEnv() string {
+	if v := os.Getenv("WATCH_DIR"); v != "" {
+		return v
+	}
+	return "/watch"
 }

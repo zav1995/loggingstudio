@@ -63,6 +63,10 @@ func (s *Server) Register(r *gin.Engine) {
 	r.DELETE("/parsers/:id", s.deleteParser)
 	r.POST("/parsers/:id/test", s.testParser)
 
+	r.GET("/rejected-ingestions", s.listRejectedIngestions)
+	r.GET("/rejected-ingestions/:id", s.getRejectedIngestion)
+	r.DELETE("/rejected-ingestions/:id", s.deleteRejectedIngestion)
+
 	r.GET("/events", s.sseEvents)
 }
 

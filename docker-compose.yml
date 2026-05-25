@@ -25,6 +25,10 @@ services:
       context: ./backend
     environment:
       DATABASE_URL: postgres://loggingstudio:loggingstudio@postgres:5432/loggingstudio?sslmode=disable
+      # INGEST_MEDIA_ID can be overridden per environment to pin which media
+      # the watch-folder loop attaches ingested logs to. When unset, the
+      # watcher falls back to the most-recently-created media in the DB.
+      INGEST_MEDIA_ID: ${INGEST_MEDIA_ID:-}
     depends_on:
       postgres:
         condition: service_healthy
