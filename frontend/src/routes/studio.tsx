@@ -20,7 +20,7 @@ import { HLSPlayer, type HLSPlayerHandle } from '../components/HLSPlayer';
 import { Timeline } from '../components/Timeline';
 import { LogList, type LogFilters } from '../components/LogList';
 import { LogEditor } from '../components/LogEditor';
-import { TagPalette } from '../components/TagPalette';
+import { TagPicker } from '../components/TagPicker';
 import { InProgressBar, type InProgressLog } from '../components/InProgressBar';
 import { useSSEEvents } from '../lib/sse-bus';
 
@@ -221,6 +221,25 @@ export function Studio() {
     setInProgressError('');
   }, []);
 
+  // toggleTag is the shared write path for both keyboard hotkeys and the
+  // clickable TagPicker. No in-progress log → starts one at currentMs with
+  // the tag attached. In-progress with the tag absent → appends. In-progress
+  // with the tag present → removes it. Toggle is symmetric on both input
+  // surfaces, so an accidental press can be undone with another press/click.
+  const toggleTag = useCallback((tagID: string) => {
+    const nowMs = playerRef.current?.currentMs() ?? 0;
+    setInProgressError('');
+    setInProgress((p) => {
+      if (!p) {
+        return { offsetIn: nowMs, offsetOut: null, tags: [tagID] };
+      }
+      if (p.tags.includes(tagID)) {
+        return { ...p, tags: p.tags.filter((id) => id !== tagID) };
+      }
+      return { ...p, tags: [...p.tags, tagID] };
+    });
+  }, []);
+
   // Unified keyboard handler: Backspace (delete selected), tag hotkeys (start
   // / add tag to in-progress), I/O (set in/out), Enter (commit), Esc
   // (discard). Skipped while focus is in any input or the editor modal is
@@ -249,20 +268,12 @@ export function Studio() {
         return;
       }
 
-      // Tag hotkey: starts or extends the in-progress log.
+      // Tag hotkey: toggles the tag on the in-progress log (creates one if
+      // none yet). Same code path as a TagPicker click.
       const tagHit = tags.find((t) => t.hotkey && t.hotkey === e.key);
       if (tagHit && tagHit.id) {
         e.preventDefault();
-        const nowMs = playerRef.current?.currentMs() ?? 0;
-        const tagID = tagHit.id;
-        setInProgressError('');
-        setInProgress((p) => {
-          if (!p) {
-            return { offsetIn: nowMs, offsetOut: null, tags: [tagID] };
-          }
-          if (p.tags.includes(tagID)) return p;
-          return { ...p, tags: [...p.tags, tagID] };
-        });
+        toggleTag(tagHit.id);
         return;
       }
 
@@ -305,7 +316,7 @@ export function Studio() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tags, selectedLogID, refreshAll, commitInProgress, discardInProgress]);
+  }, [tags, selectedLogID, refreshAll, commitInProgress, discardInProgress, toggleTag]);
 
   const onPlayerTimeUpdate = useCallback((ms: number, dur: number) => {
     setCurrentMs(ms);
@@ -395,7 +406,6 @@ export function Studio() {
               onSeek={onTimelineSeek}
               onSelect={jumpToLog}
             />
-            <TagPalette tags={tags} groups={groups} />
           </Stack>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 4 }}>
@@ -413,6 +423,14 @@ export function Studio() {
           />
         </Grid.Col>
       </Grid>
+
+      {/* Full-width below the grid: spacious, fingertip-friendly. */}
+      <TagPicker
+        tags={tags}
+        groups={groups}
+        selectedTagIDs={inProgress?.tags ?? []}
+        onToggle={toggleTag}
+      />
 
       <LogEditor
         log={selectedLog}
