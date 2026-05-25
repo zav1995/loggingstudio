@@ -23,6 +23,11 @@ import { LogEditor } from '../components/LogEditor';
 import { TagPicker } from '../components/TagPicker';
 import { InProgressBar, type InProgressLog } from '../components/InProgressBar';
 import { useSSEEvents } from '../lib/sse-bus';
+import {
+  type PickerMessage,
+  type PickerState,
+  usePickerChannel,
+} from '../lib/picker-channel';
 
 const logListSchema = z.array(logSchema);
 const tagListSchema = z.array(tagSchema);
@@ -54,6 +59,9 @@ export function Studio() {
   const [loadError, setLoadError] = useState('');
   const [inProgress, setInProgress] = useState<InProgressLog | null>(null);
   const [inProgressError, setInProgressError] = useState('');
+  // Bumped on every 'requestState' message so the state-publish effect fires
+  // even when none of the source-of-truth values changed (popup just opened).
+  const [publishTick, setPublishTick] = useState(0);
 
   const playerRef = useRef<HLSPlayerHandle>(null);
   // Refs let the global keydown handler read the freshest state without
@@ -240,6 +248,80 @@ export function Studio() {
     });
   }, []);
 
+  const setInToCurrent = useCallback(() => {
+    const nowMs = playerRef.current?.currentMs() ?? 0;
+    setInProgressError('');
+    setInProgress((p) =>
+      p
+        ? { ...p, offsetIn: nowMs }
+        : { offsetIn: nowMs, offsetOut: null, tags: [] },
+    );
+  }, []);
+
+  const setOutToCurrent = useCallback(() => {
+    const nowMs = playerRef.current?.currentMs() ?? 0;
+    setInProgressError('');
+    setInProgress((p) =>
+      p
+        ? { ...p, offsetOut: nowMs }
+        : { offsetIn: nowMs, offsetOut: nowMs, tags: [] },
+    );
+  }, []);
+
+  // BroadcastChannel sync with any popped-out picker window. Studio owns
+  // the source of truth; the popup applies actions back through the same
+  // toggleTag / setIn / setOut / commit / discard surfaces.
+  const onPickerMsg = useCallback(
+    (msg: PickerMessage) => {
+      switch (msg.kind) {
+        case 'requestState':
+          // Bump the tick so the publish effect re-fires even if none of the
+          // source values changed since the last publish.
+          setPublishTick((t) => t + 1);
+          break;
+        case 'toggleTag':
+          toggleTag(msg.tagID);
+          break;
+        case 'setIn':
+          setInToCurrent();
+          break;
+        case 'setOut':
+          setOutToCurrent();
+          break;
+        case 'commit':
+          void commitInProgress();
+          break;
+        case 'discard':
+          discardInProgress();
+          break;
+        case 'state':
+          // We're the publisher of 'state'; ignore self-echo (shouldn't
+          // happen — Broadcast skips self — but be defensive).
+          break;
+      }
+    },
+    [toggleTag, setInToCurrent, setOutToCurrent, commitInProgress, discardInProgress],
+  );
+  const { publish: publishPicker } = usePickerChannel(onPickerMsg);
+
+  // Republish the picker state whenever anything the popup needs changes
+  // or when a popup explicitly asks for it (publishTick).
+  useEffect(() => {
+    const state: PickerState = {
+      tags,
+      groups,
+      inProgress,
+      frameRate: media.status === 'ok' ? media.data.frame_rate : 25,
+      mediaID: activeMediaID,
+    };
+    publishPicker({ kind: 'state', state });
+  }, [tags, groups, inProgress, media, activeMediaID, publishTick, publishPicker]);
+
+  const openPopOut = useCallback(() => {
+    window.open('/picker', 'loggingstudio-picker',
+      'width=720,height=900,menubar=no,toolbar=no,location=no');
+  }, []);
+
   // Unified keyboard handler: Backspace (delete selected), tag hotkeys (start
   // / add tag to in-progress), I/O (set in/out), Enter (commit), Esc
   // (discard). Skipped while focus is in any input or the editor modal is
@@ -281,24 +363,12 @@ export function Studio() {
 
       if (key === 'i') {
         e.preventDefault();
-        const nowMs = playerRef.current?.currentMs() ?? 0;
-        setInProgressError('');
-        setInProgress((p) =>
-          p
-            ? { ...p, offsetIn: nowMs }
-            : { offsetIn: nowMs, offsetOut: null, tags: [] },
-        );
+        setInToCurrent();
         return;
       }
       if (key === 'o') {
         e.preventDefault();
-        const nowMs = playerRef.current?.currentMs() ?? 0;
-        setInProgressError('');
-        setInProgress((p) =>
-          p
-            ? { ...p, offsetOut: nowMs }
-            : { offsetIn: nowMs, offsetOut: nowMs, tags: [] },
-        );
+        setOutToCurrent();
         return;
       }
       if (e.key === 'Enter') {
@@ -316,7 +386,16 @@ export function Studio() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tags, selectedLogID, refreshAll, commitInProgress, discardInProgress, toggleTag]);
+  }, [
+    tags,
+    selectedLogID,
+    refreshAll,
+    commitInProgress,
+    discardInProgress,
+    toggleTag,
+    setInToCurrent,
+    setOutToCurrent,
+  ]);
 
   const onPlayerTimeUpdate = useCallback((ms: number, dur: number) => {
     setCurrentMs(ms);
@@ -430,6 +509,7 @@ export function Studio() {
         groups={groups}
         selectedTagIDs={inProgress?.tags ?? []}
         onToggle={toggleTag}
+        onPopOut={openPopOut}
       />
 
       <LogEditor

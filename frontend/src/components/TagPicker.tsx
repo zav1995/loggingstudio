@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Card, Chip, ColorSwatch, Group, Stack, Text, Title } from '@mantine/core';
+import { Button, Card, Chip, ColorSwatch, Group, Stack, Text, Title } from '@mantine/core';
 
 import type { Tag, TagGroup } from '../api/schemas';
 
@@ -8,6 +8,7 @@ type Props = {
   groups: TagGroup[];
   selectedTagIDs: string[];
   onToggle: (tagID: string) => void;
+  onPopOut?: () => void;
 };
 
 // TagPicker replaces the old read-only TagPalette. Every tag is a Mantine
@@ -15,7 +16,7 @@ type Props = {
 // so the operator sees exactly which tags are about to be committed.
 // Optimized for ease of clicking, not vertical compactness — per the manual-
 // logging UX requirements.
-export function TagPicker({ tags, groups, selectedTagIDs, onToggle }: Props) {
+export function TagPicker({ tags, groups, selectedTagIDs, onToggle, onPopOut }: Props) {
   const groupedTags = useMemo(() => {
     return groups
       .map((g) => ({
@@ -41,10 +42,17 @@ export function TagPicker({ tags, groups, selectedTagIDs, onToggle }: Props) {
     <Card withBorder padding="md" radius="md" bg="#161616">
       <Stack gap="lg">
         <Group justify="space-between">
-          <Title order={5}>Tag picker</Title>
-          <Text size="xs" c="dimmed">
-            click to {selectedTagIDs.length > 0 ? 'add / remove' : 'start a log'}
-          </Text>
+          <Group gap="sm">
+            <Title order={5}>Tag picker</Title>
+            <Text size="xs" c="dimmed">
+              click to {selectedTagIDs.length > 0 ? 'add / remove' : 'start a log'}
+            </Text>
+          </Group>
+          {onPopOut && (
+            <Button size="xs" variant="default" onClick={onPopOut}>
+              Pop out ↗
+            </Button>
+          )}
         </Group>
         <Stack gap="md">
           {groupedTags.map(({ group, tags: groupTags }) => (
