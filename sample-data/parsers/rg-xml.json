@@ -1,7 +1,7 @@
 {
   "match": "Log",
   "filters": [
-    { "path": "UserFields/UserField[Header='Court']/text()", "op": "eq", "value": "Court 13" }
+    { "path": "UserFields/UserField[@Header='Court']", "op": "eq", "value": "Court 13" }
   ],
   "mapping": {
     "offset_in":  { "type": "timecode_to_ms", "path": "TC", "minus_ms": 5000 },
