@@ -22,6 +22,7 @@ import { LogList, type LogFilters } from '../components/LogList';
 import { LogEditor } from '../components/LogEditor';
 import { TagPalette } from '../components/TagPalette';
 import { InProgressBar, type InProgressLog } from '../components/InProgressBar';
+import { useSSEEvents } from '../lib/sse-bus';
 
 const logListSchema = z.array(logSchema);
 const tagListSchema = z.array(tagSchema);
@@ -119,6 +120,21 @@ export function Studio() {
   useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  // Subscribe to log.* and ingest.* events from the app-level SSE bus.
+  // Any time a log mutates or an ingestion lands, refresh the timeline +
+  // list so the studio stays in lockstep with the server (including changes
+  // from other clients and from the watch loop).
+  useSSEEvents((evt) => {
+    if (
+      evt.type === 'log.created' ||
+      evt.type === 'log.updated' ||
+      evt.type === 'log.deleted' ||
+      evt.type === 'ingest.processed'
+    ) {
+      void refreshAll();
+    }
+  });
 
   // Client-side filtering: keep timeline + list in lockstep.
   const filteredLogs = useMemo(() => {
