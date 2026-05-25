@@ -161,8 +161,23 @@ export function Studio() {
     [filteredLogs, selectedLogID],
   );
 
-  // Selecting a log = open editor + seek player to its in-point.
-  const selectLog = useCallback(
+  // jumpToLog: select + seek + play, no editor. This is the row/bar click
+  // path — the user wants to scrub here and watch what they tagged.
+  const jumpToLog = useCallback(
+    (id: string) => {
+      setSelectedLogID(id);
+      const log = logs.find((l) => l.id === id);
+      if (log && playerRef.current) {
+        playerRef.current.seekAndPlay(log.offset_in);
+      }
+    },
+    [logs],
+  );
+
+  // openEditor: explicit edit-icon path — select + open modal. We seek too
+  // so the player is at the right frame while editing, but stay paused so
+  // the user can scrub by frame in the editor without fighting playback.
+  const openEditor = useCallback(
     (id: string) => {
       setSelectedLogID(id);
       const log = logs.find((l) => l.id === id);
@@ -378,7 +393,7 @@ export function Studio() {
               selectedLogID={selectedLogID}
               frameRate={media.data.frame_rate}
               onSeek={onTimelineSeek}
-              onSelect={selectLog}
+              onSelect={jumpToLog}
             />
             <TagPalette tags={tags} groups={groups} />
           </Stack>
@@ -393,7 +408,8 @@ export function Studio() {
             onFiltersChange={setFilters}
             selectedLogID={selectedLogID}
             frameRate={media.data.frame_rate}
-            onSelect={selectLog}
+            onSelect={jumpToLog}
+            onEdit={openEditor}
           />
         </Grid.Col>
       </Grid>

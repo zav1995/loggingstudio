@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import {
+  ActionIcon,
   Badge,
   Card,
   Group,
@@ -8,6 +9,7 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
 } from '@mantine/core';
 
 import type { Log, Session, Tag, TagGroup } from '../api/schemas';
@@ -30,6 +32,7 @@ type Props = {
   selectedLogID: string | null;
   frameRate: number;
   onSelect: (logID: string) => void;
+  onEdit: (logID: string) => void;
 };
 
 export function LogList({
@@ -42,6 +45,7 @@ export function LogList({
   selectedLogID,
   frameRate,
   onSelect,
+  onEdit,
 }: Props) {
   const tagOptions = useMemo(
     () =>
@@ -109,6 +113,7 @@ export function LogList({
                 frameRate={frameRate}
                 selected={log.id === selectedLogID}
                 onSelect={onSelect}
+                onEdit={onEdit}
               />
             ))}
           </Stack>
@@ -125,6 +130,7 @@ function LogRow({
   frameRate,
   selected,
   onSelect,
+  onEdit,
 }: {
   log: Log;
   tags: Tag[];
@@ -132,6 +138,7 @@ function LogRow({
   frameRate: number;
   selected: boolean;
   onSelect: (id: string) => void;
+  onEdit: (id: string) => void;
 }) {
   const color = logColor(log, tags, groups);
   const tagNames = log.tags
@@ -153,16 +160,31 @@ function LogRow({
       }}
     >
       <Stack gap={2}>
-        <Group gap="xs" justify="space-between">
+        <Group gap="xs" justify="space-between" wrap="nowrap">
           <Text size="sm" ff="monospace">
             {msToRelativeTC(log.offset_in, frameRate)}
             {log.offset_out !== null && log.offset_out !== undefined
               ? ` → ${msToRelativeTC(log.offset_out, frameRate)}`
               : ''}
           </Text>
-          <Badge size="xs" variant="default" color="gray">
-            {log.source}
-          </Badge>
+          <Group gap={4} wrap="nowrap">
+            <Badge size="xs" variant="default" color="gray">
+              {log.source}
+            </Badge>
+            <Tooltip label="Edit">
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                aria-label="edit log"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (log.id) onEdit(log.id);
+                }}
+              >
+                ✎
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Group>
         {(tagNames.length > 0 || extraTagCount > 0) && (
           <Group gap={4}>

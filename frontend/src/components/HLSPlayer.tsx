@@ -21,6 +21,9 @@ type Props = {
 
 export type HLSPlayerHandle = {
   seek: (ms: number) => void;
+  // seekAndPlay jumps to the offset and starts playback. Used by row/bar
+  // clicks where the user wants to "scrub here and watch it" in one gesture.
+  seekAndPlay: (ms: number) => void;
   currentMs: () => number;
 };
 
@@ -130,6 +133,14 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
       seek: (ms: number) => {
         const v = videoRef.current;
         if (v) v.currentTime = Math.max(0, ms / 1000);
+      },
+      seekAndPlay: (ms: number) => {
+        const v = videoRef.current;
+        if (!v) return;
+        setShuttle('normal');
+        v.playbackRate = 1;
+        v.currentTime = Math.max(0, ms / 1000);
+        void v.play();
       },
       currentMs: () => {
         const v = videoRef.current;
