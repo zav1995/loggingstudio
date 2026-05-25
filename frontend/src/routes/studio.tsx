@@ -507,6 +507,7 @@ export function Studio() {
               currentMs={currentMs}
               selectedLogID={selectedLogID}
               frameRate={media.data.frame_rate}
+              startedAtTC={media.data.started_at_tc}
               onSeek={onTimelineSeek}
               onSelect={jumpToLog}
             />

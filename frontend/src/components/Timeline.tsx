@@ -3,7 +3,7 @@ import { Box, Stack, Text } from '@mantine/core';
 
 import type { Log, Tag, TagGroup } from '../api/schemas';
 import { logColor } from '../lib/log-color';
-import { msToRelativeTC } from '../lib/timecode';
+import { msToRelativeTC, msToWallTC } from '../lib/timecode';
 
 type Props = {
   logs: Log[];
@@ -13,6 +13,7 @@ type Props = {
   currentMs: number;
   selectedLogID: string | null;
   frameRate: number;
+  startedAtTC: string;
   onSeek: (ms: number) => void;
   onSelect: (logID: string) => void;
 };
@@ -40,6 +41,7 @@ export function Timeline({
   currentMs,
   selectedLogID,
   frameRate,
+  startedAtTC,
   onSeek,
   onSelect,
 }: Props) {
@@ -109,7 +111,7 @@ export function Timeline({
               whiteSpace: 'nowrap',
             }}
           >
-            {msToRelativeTC(t, frameRate)}
+            {msToWallTC(t, startedAtTC, frameRate)}
           </span>
         ))}
       </Box>
@@ -215,7 +217,7 @@ export function Timeline({
                 whiteSpace: 'nowrap',
               }}
             >
-              {msToRelativeTC(hoverMs, frameRate)}
+              {msToWallTC(hoverMs, startedAtTC, frameRate)}
             </Box>
           </>
         )}
