@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core';
 
-import { TagPicker } from '../components/TagPicker';
+import { ConsoleTagGrid } from '../components/ConsoleTagGrid';
 import {
   type PickerMessage,
   type PickerState,
@@ -11,8 +10,8 @@ import { msToRelativeTC } from '../lib/timecode';
 
 // Standalone window route. The main Studio window publishes state changes
 // over BroadcastChannel; this window publishes action messages back. No
-// AppShell — this is intended to be popped into a separate browser window
-// and live full-bleed.
+// AppShell, no Mantine chrome — broadcast-console aesthetic: solid black,
+// big color tiles, bold uppercase labels.
 export function PickerWindow() {
   const [state, setState] = useState<PickerState | null>(null);
 
@@ -86,108 +85,192 @@ export function PickerWindow() {
 
   if (!state) {
     return (
-      <Stack p="md" style={{ minHeight: '100vh', background: '#0A0A0A' }}>
-        <Title order={4} c="white">
-          Tag picker
-        </Title>
-        <Text c="dimmed" size="sm">
+      <div style={pageStyle}>
+        <div style={{ color: '#FAFAFA', fontWeight: 700, marginBottom: 8 }}>
+          TAG PICKER
+        </div>
+        <div style={{ color: '#888', fontSize: 13 }}>
           Waiting for the main studio window…
-        </Text>
-        <Text c="dimmed" size="xs">
+        </div>
+        <div style={{ color: '#555', fontSize: 11, marginTop: 4 }}>
           (Open /studio in another tab/window first, then click "Pop out".)
-        </Text>
-      </Stack>
+        </div>
+      </div>
     );
   }
 
   const ip = state.inProgress;
 
   return (
-    <Stack p="md" gap="md" style={{ minHeight: '100vh', background: '#0A0A0A' }}>
-      <Group justify="space-between" wrap="nowrap">
-        <Group gap="xs" wrap="nowrap">
-          <Title order={4} c="white">
-            Tag picker
-          </Title>
-          {state.mediaID && (
-            <Badge color="scoreplay-green" variant="light" maw={260}>
-              {state.mediaID}
-            </Badge>
-          )}
-        </Group>
-      </Group>
-
-      <Card
-        withBorder
-        padding="sm"
-        radius="md"
-        bg={ip ? '#1a1a1a' : '#161616'}
-        style={{ borderColor: ip ? '#00FF87' : '#2a2a2a' }}
-      >
-        <Stack gap="xs">
-          <Group justify="space-between" wrap="nowrap">
-            <Group gap="sm" wrap="wrap">
-              {ip ? (
-                <>
-                  <Badge color="scoreplay-green">recording</Badge>
-                  <Text size="sm" ff="monospace" c="white">
-                    in {msToRelativeTC(ip.offsetIn, state.frameRate)}
-                    {ip.offsetOut !== null
-                      ? ` → out ${msToRelativeTC(ip.offsetOut, state.frameRate)}`
-                      : ''}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {ip.tags.length} tag{ip.tags.length === 1 ? '' : 's'}
-                  </Text>
-                </>
-              ) : (
-                <Text size="sm" c="dimmed">
-                  No log in progress — click a tag to start one.
-                </Text>
-              )}
-            </Group>
-            <Group gap="xs" wrap="nowrap">
-              <Button
-                size="xs"
-                variant="default"
-                onClick={() => publish({ kind: 'setIn' })}
-              >
-                Set in
-              </Button>
-              <Button
-                size="xs"
-                variant="default"
-                onClick={() => publish({ kind: 'setOut' })}
-              >
-                Set out
-              </Button>
-              <Button
-                size="xs"
-                color="scoreplay-green"
-                disabled={!ip}
-                onClick={() => publish({ kind: 'commit' })}
-              >
-                Commit
-              </Button>
-              <Button
-                size="xs"
-                variant="subtle"
-                disabled={!ip}
-                onClick={() => publish({ kind: 'discard' })}
-              >
-                Discard
-              </Button>
-            </Group>
-          </Group>
-        </Stack>
-      </Card>
-
-      <TagPicker
+    <div style={pageStyle}>
+      <StatusBar state={state} publish={publish} />
+      <ConsoleTagGrid
         tags={state.tags}
         groups={state.groups}
         selectedTagIDs={ip?.tags ?? []}
         onToggle={toggleTag}
       />
-    </Stack>
+    </div>
+  );
+}
+
+const pageStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  background: '#000000',
+  padding: 12,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+  fontFamily:
+    'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+};
+
+function StatusBar({
+  state,
+  publish,
+}: {
+  state: PickerState;
+  publish: (msg: PickerMessage) => void;
+}) {
+  const ip = state.inProgress;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '10px 12px',
+        background: ip ? '#0d2419' : '#111',
+        border: `1px solid ${ip ? '#00FF87' : '#262626'}`,
+        borderRadius: 4,
+        color: '#FAFAFA',
+        fontSize: 13,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <StatusPill on={Boolean(ip)} />
+        {ip ? (
+          <>
+            <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+              in {msToRelativeTC(ip.offsetIn, state.frameRate)}
+              {ip.offsetOut !== null
+                ? ` → out ${msToRelativeTC(ip.offsetOut, state.frameRate)}`
+                : ''}
+            </span>
+            <span style={{ color: '#888', fontSize: 12 }}>
+              {ip.tags.length} tag{ip.tags.length === 1 ? '' : 's'}
+            </span>
+          </>
+        ) : (
+          <span style={{ color: '#888' }}>
+            No log in progress — tap a tile to start one.
+          </span>
+        )}
+        {state.mediaID && (
+          <span
+            style={{
+              padding: '2px 8px',
+              borderRadius: 3,
+              background: '#163b2a',
+              color: '#00FF87',
+              fontSize: 11,
+              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+            }}
+          >
+            {state.mediaID}
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <ConsoleControl
+          label="SET IN"
+          onClick={() => publish({ kind: 'setIn' })}
+        />
+        <ConsoleControl
+          label="SET OUT"
+          onClick={() => publish({ kind: 'setOut' })}
+        />
+        <ConsoleControl
+          label="COMMIT"
+          color="#00CC6C"
+          disabled={!ip}
+          onClick={() => publish({ kind: 'commit' })}
+        />
+        <ConsoleControl
+          label="DISCARD"
+          color="#552222"
+          disabled={!ip}
+          onClick={() => publish({ kind: 'discard' })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ on }: { on: boolean }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11,
+        fontWeight: 800,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        padding: '3px 8px',
+        borderRadius: 3,
+        background: on ? '#00FF87' : '#333',
+        color: on ? '#003317' : '#aaa',
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: on ? '#003317' : '#666',
+        }}
+      />
+      {on ? 'recording' : 'idle'}
+    </span>
+  );
+}
+
+function ConsoleControl({
+  label,
+  onClick,
+  disabled,
+  color = '#1f1f1f',
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  color?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: disabled ? '#181818' : color,
+        color: disabled ? '#555' : '#FAFAFA',
+        fontSize: 11,
+        fontWeight: 800,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        border: 'none',
+        borderRadius: 3,
+        padding: '8px 12px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily:
+          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
+      {label}
+    </button>
   );
 }
