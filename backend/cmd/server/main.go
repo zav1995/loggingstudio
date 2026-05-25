@@ -18,6 +18,7 @@ import (
 	"github.com/zav1995/loggingstudio/backend/internal/events"
 	"github.com/zav1995/loggingstudio/backend/internal/handlers"
 	"github.com/zav1995/loggingstudio/backend/internal/ingest"
+	"github.com/zav1995/loggingstudio/backend/internal/picker"
 )
 
 func main() {
@@ -45,11 +46,12 @@ func main() {
 	defer pool.Close()
 
 	broker := events.New()
+	pickerRelay := picker.NewRelay()
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
-	handlers.New(pool, broker).Register(r)
+	handlers.New(pool, broker, pickerRelay).Register(r)
 
 	// Watcher runs in its own goroutine and shares the broker so its
 	// ingest.processed / ingest.rejected events ride the same SSE stream

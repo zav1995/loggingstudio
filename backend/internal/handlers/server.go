@@ -12,17 +12,24 @@ import (
 
 	queries "github.com/zav1995/loggingstudio/backend/internal/db/generated"
 	"github.com/zav1995/loggingstudio/backend/internal/events"
+	"github.com/zav1995/loggingstudio/backend/internal/picker"
 )
 
 // Server is the HTTP layer's dependency container.
 type Server struct {
-	pool   *pgxpool.Pool
-	q      *queries.Queries
-	broker *events.Broker
+	pool        *pgxpool.Pool
+	q           *queries.Queries
+	broker      *events.Broker
+	pickerRelay *picker.Relay
 }
 
-func New(pool *pgxpool.Pool, broker *events.Broker) *Server {
-	return &Server{pool: pool, q: queries.New(pool), broker: broker}
+func New(pool *pgxpool.Pool, broker *events.Broker, pickerRelay *picker.Relay) *Server {
+	return &Server{
+		pool:        pool,
+		q:           queries.New(pool),
+		broker:      broker,
+		pickerRelay: pickerRelay,
+	}
 }
 
 // Register attaches all routes onto the given engine.
@@ -68,6 +75,9 @@ func (s *Server) Register(r *gin.Engine) {
 	r.DELETE("/rejected-ingestions/:id", s.deleteRejectedIngestion)
 
 	r.GET("/events", s.sseEvents)
+
+	r.POST("/picker-sessions/:id/messages", s.publishPickerMessage)
+	r.GET("/picker-sessions/:id/stream", s.streamPickerMessages)
 }
 
 func (s *Server) getHealth(c *gin.Context) {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Grid, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { z } from 'zod';
 
 import { ApiError, api } from '../api/client';
@@ -23,11 +24,12 @@ import { LogEditor } from '../components/LogEditor';
 import { TagPicker } from '../components/TagPicker';
 import { InProgressBar, type InProgressLog } from '../components/InProgressBar';
 import { useSSEEvents } from '../lib/sse-bus';
+import type { PickerMessage, PickerState } from '../lib/picker-channel';
+import { usePickerSession } from '../lib/picker-net';
 import {
-  type PickerMessage,
-  type PickerState,
-  usePickerChannel,
-} from '../lib/picker-channel';
+  getOrCreatePickerSessionID,
+  pickerControlsURL,
+} from '../lib/picker-session';
 
 const logListSchema = z.array(logSchema);
 const tagListSchema = z.array(tagSchema);
@@ -268,9 +270,12 @@ export function Studio() {
     );
   }, []);
 
-  // BroadcastChannel sync with any popped-out picker window. Studio owns
-  // the source of truth; the popup applies actions back through the same
-  // toggleTag / setIn / setOut / commit / discard surfaces.
+  // Network bridge to any popped-out picker on this device or another one
+  // on the LAN. Studio is the publisher; popups apply actions back through
+  // the same toggleTag / setIn / setOut / commit / discard surfaces. The
+  // session id is stored in localStorage so a reload keeps the same channel
+  // and any open popups stay in sync without re-pairing.
+  const pickerSessionID = useMemo(() => getOrCreatePickerSessionID(), []);
   const onPickerMsg = useCallback(
     (msg: PickerMessage) => {
       switch (msg.kind) {
@@ -295,14 +300,14 @@ export function Studio() {
           discardInProgress();
           break;
         case 'state':
-          // We're the publisher of 'state'; ignore self-echo (shouldn't
-          // happen — Broadcast skips self — but be defensive).
+          // We publish 'state'; any echo would arrive here too. Cheap to
+          // ignore.
           break;
       }
     },
     [toggleTag, setInToCurrent, setOutToCurrent, commitInProgress, discardInProgress],
   );
-  const { publish: publishPicker } = usePickerChannel(onPickerMsg);
+  const { publish: publishPicker } = usePickerSession(pickerSessionID, onPickerMsg);
 
   // Republish the picker state whenever anything the popup needs changes
   // or when a popup explicitly asks for it (publishTick).
@@ -318,9 +323,33 @@ export function Studio() {
   }, [tags, groups, inProgress, media, activeMediaID, publishTick, publishPicker]);
 
   const openPopOut = useCallback(() => {
-    window.open('/picker', 'loggingstudio-picker',
-      'width=720,height=900,menubar=no,toolbar=no,location=no');
-  }, []);
+    const url = pickerControlsURL(pickerSessionID);
+    window.open(
+      url,
+      'loggingstudio-picker',
+      'width=720,height=900,menubar=no,toolbar=no,location=no',
+    );
+  }, [pickerSessionID]);
+
+  const copyControlsURL = useCallback(async () => {
+    const url = pickerControlsURL(pickerSessionID);
+    try {
+      await navigator.clipboard.writeText(url);
+      notifications.show({
+        color: 'scoreplay-green',
+        title: 'Controls URL copied',
+        message: url.includes('localhost')
+          ? `${url} — replace localhost with your machine's LAN IP to open on another device`
+          : url,
+      });
+    } catch {
+      notifications.show({
+        color: 'red',
+        title: 'Could not copy',
+        message: url,
+      });
+    }
+  }, [pickerSessionID]);
 
   // Unified keyboard handler: Backspace (delete selected), tag hotkeys (start
   // / add tag to in-progress), I/O (set in/out), Enter (commit), Esc
@@ -506,6 +535,7 @@ export function Studio() {
         selectedTagIDs={inProgress?.tags ?? []}
         onToggle={toggleTag}
         onPopOut={openPopOut}
+        onCopyControlsURL={copyControlsURL}
       />
 
       <LogEditor

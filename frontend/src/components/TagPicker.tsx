@@ -9,6 +9,7 @@ type Props = {
   selectedTagIDs: string[];
   onToggle: (tagID: string) => void;
   onPopOut?: () => void;
+  onCopyControlsURL?: () => void;
 };
 
 // TagPicker replaces the old read-only TagPalette. Every tag is a Mantine
@@ -16,7 +17,14 @@ type Props = {
 // so the operator sees exactly which tags are about to be committed.
 // Optimized for ease of clicking, not vertical compactness — per the manual-
 // logging UX requirements.
-export function TagPicker({ tags, groups, selectedTagIDs, onToggle, onPopOut }: Props) {
+export function TagPicker({
+  tags,
+  groups,
+  selectedTagIDs,
+  onToggle,
+  onPopOut,
+  onCopyControlsURL,
+}: Props) {
   const groupedTags = useMemo(() => {
     return groups
       .map((g) => ({
@@ -48,11 +56,18 @@ export function TagPicker({ tags, groups, selectedTagIDs, onToggle, onPopOut }: 
               click to {selectedTagIDs.length > 0 ? 'add / remove' : 'start a log'}
             </Text>
           </Group>
-          {onPopOut && (
-            <Button size="xs" variant="default" onClick={onPopOut}>
-              Pop out ↗
-            </Button>
-          )}
+          <Group gap="xs">
+            {onCopyControlsURL && (
+              <Button size="xs" variant="default" onClick={onCopyControlsURL}>
+                Copy controls URL 📋
+              </Button>
+            )}
+            {onPopOut && (
+              <Button size="xs" variant="default" onClick={onPopOut}>
+                Pop out ↗
+              </Button>
+            )}
+          </Group>
         </Group>
         <Stack gap="md">
           {groupedTags.map(({ group, tags: groupTags }) => (

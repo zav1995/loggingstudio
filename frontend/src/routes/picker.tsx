@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { ConsoleTagGrid } from '../components/ConsoleTagGrid';
-import {
-  type PickerMessage,
-  type PickerState,
-  usePickerChannel,
-} from '../lib/picker-channel';
+import type { PickerMessage, PickerState } from '../lib/picker-channel';
+import { usePickerSession } from '../lib/picker-net';
 import { msToRelativeTC } from '../lib/timecode';
 
-// Standalone window route. The main Studio window publishes state changes
-// over BroadcastChannel; this window publishes action messages back. No
-// AppShell, no Mantine chrome — broadcast-console aesthetic: solid black,
-// big color tiles, bold uppercase labels.
+// Standalone window route. The studio publishes state changes over the
+// network relay (/api/picker-sessions/:id/{stream,messages}); this window
+// publishes action messages back to the same session. The session id comes
+// from ?session=<id> in the URL — the "Copy controls URL" button in the
+// studio writes that URL.
 export function PickerWindow() {
+  const [params] = useSearchParams();
+  const sessionID = params.get('session');
+
   const [state, setState] = useState<PickerState | null>(null);
 
   const onMessage = useCallback((msg: PickerMessage) => {
@@ -20,18 +22,18 @@ export function PickerWindow() {
       setState(msg.state);
     }
   }, []);
-  const { publish } = usePickerChannel(onMessage);
+  const { publish } = usePickerSession(sessionID, onMessage);
 
-  // Ask the main window to send us the current state on mount (and on
-  // reload — Broadcast does not replay).
+  // Ask the studio to send us the current state on mount (the relay does
+  // not replay history).
   const requested = useRef(false);
   useEffect(() => {
+    if (!sessionID) return;
     if (requested.current) return;
     requested.current = true;
-    // Defer one tick so the channel subscription is in place.
-    const handle = setTimeout(() => publish({ kind: 'requestState' }), 50);
+    const handle = setTimeout(() => publish({ kind: 'requestState' }), 200);
     return () => clearTimeout(handle);
-  }, [publish]);
+  }, [publish, sessionID]);
 
   const toggleTag = useCallback(
     (tagID: string) => publish({ kind: 'toggleTag', tagID }),
@@ -40,7 +42,7 @@ export function PickerWindow() {
 
   // Keyboard handler — mirrors Studio's. The popped window can also drive
   // hotkeys, I/O, Enter, Esc. We forward as action messages and let the
-  // main window apply.
+  // studio apply.
   useEffect(() => {
     if (!state) return;
     const onKey = (e: KeyboardEvent) => {
@@ -51,7 +53,6 @@ export function PickerWindow() {
           return;
         }
       }
-      // Tag hotkey
       const tagHit = state.tags.find((t) => t.hotkey && t.hotkey === e.key);
       if (tagHit && tagHit.id) {
         e.preventDefault();
@@ -83,6 +84,23 @@ export function PickerWindow() {
     return () => window.removeEventListener('keydown', onKey);
   }, [publish, state]);
 
+  if (!sessionID) {
+    return (
+      <div style={pageStyle}>
+        <div style={{ color: '#FAFAFA', fontWeight: 700, marginBottom: 8 }}>
+          TAG PICKER
+        </div>
+        <div style={{ color: '#888', fontSize: 13 }}>
+          Missing session — the URL needs a ?session=&lt;id&gt; parameter.
+        </div>
+        <div style={{ color: '#555', fontSize: 11, marginTop: 4 }}>
+          Open /studio on the main device and click "Copy controls URL" to
+          paste here.
+        </div>
+      </div>
+    );
+  }
+
   if (!state) {
     return (
       <div style={pageStyle}>
@@ -90,10 +108,14 @@ export function PickerWindow() {
           TAG PICKER
         </div>
         <div style={{ color: '#888', fontSize: 13 }}>
-          Waiting for the main studio window…
+          Waiting for the studio…
         </div>
         <div style={{ color: '#555', fontSize: 11, marginTop: 4 }}>
-          (Open /studio in another tab/window first, then click "Pop out".)
+          (Session{' '}
+          <code style={{ background: '#111', padding: '1px 4px' }}>
+            {sessionID}
+          </code>
+          )
         </div>
       </div>
     );

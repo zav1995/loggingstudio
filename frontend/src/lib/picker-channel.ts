@@ -1,15 +1,12 @@
-// Cross-window message bus for the pop-out tag picker. Uses BroadcastChannel
-// (same-origin, multi-window). The main Studio window owns the source of
-// truth and publishes 'state'; the popped-out picker window publishes
-// actions ('toggleTag', 'setIn', 'setOut', 'commit', 'discard') that the
-// main window applies.
-
-import { useCallback, useEffect, useRef } from 'react';
+// Picker protocol types — shared between the studio (publisher) and the
+// pop-out picker windows (subscribers + action publishers). The transport
+// lives in lib/picker-net.ts (HTTP + SSE against the backend's per-session
+// relay). This file used to host a BroadcastChannel-based same-browser
+// implementation; the network version replaced it once iPad / multi-device
+// support became the deployment target.
 
 import type { Tag, TagGroup } from '../api/schemas';
 import type { InProgressLog } from '../components/InProgressBar';
-
-export const PICKER_CHANNEL_NAME = 'loggingstudio.picker';
 
 export type PickerState = {
   tags: Tag[];
@@ -27,34 +24,3 @@ export type PickerMessage =
   | { kind: 'commit' }
   | { kind: 'discard' }
   | { kind: 'requestState' };
-
-// usePickerChannel opens a BroadcastChannel for the lifetime of the calling
-// component. The handler is kept fresh via a ref so callers don't have to
-// memoize it.
-export function usePickerChannel(handler: (msg: PickerMessage) => void): {
-  publish: (msg: PickerMessage) => void;
-} {
-  const handlerRef = useRef(handler);
-  handlerRef.current = handler;
-  const channelRef = useRef<BroadcastChannel | null>(null);
-
-  useEffect(() => {
-    const ch = new BroadcastChannel(PICKER_CHANNEL_NAME);
-    channelRef.current = ch;
-    const onMessage = (e: MessageEvent) => {
-      handlerRef.current(e.data as PickerMessage);
-    };
-    ch.addEventListener('message', onMessage);
-    return () => {
-      ch.removeEventListener('message', onMessage);
-      ch.close();
-      channelRef.current = null;
-    };
-  }, []);
-
-  const publish = useCallback((msg: PickerMessage) => {
-    channelRef.current?.postMessage(msg);
-  }, []);
-
-  return { publish };
-}
