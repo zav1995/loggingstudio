@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ActionIcon, Badge, Code, Group, Stack, Switch, Text } from '@mantine/core';
+import { Badge, Code, Group, Stack, Text, Tooltip } from '@mantine/core';
 import Hls from 'hls.js';
 
 import { msToRelativeTC, msToWallTC } from '../lib/timecode';
@@ -27,12 +27,6 @@ export type HLSPlayerHandle = {
   currentMs: () => number;
 };
 
-type LoopRegion = {
-  inMs: number | null;
-  outMs: number | null;
-  enabled: boolean;
-};
-
 export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
   { src, startedAtTC, frameRate, onTimeUpdate },
   forwardedRef,
@@ -43,7 +37,6 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
   const [durationMs, setDurationMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [shuttle, setShuttle] = useState<'normal' | 'reverse'>('normal');
-  const [loop, setLoop] = useState<LoopRegion>({ inMs: null, outMs: null, enabled: false });
   const [error, setError] = useState('');
 
   // Attach hls.js or fall back to native (Safari).
@@ -150,16 +143,6 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
     [],
   );
 
-  // Loop-region enforcement.
-  useEffect(() => {
-    if (!loop.enabled || loop.inMs === null || loop.outMs === null) return;
-    if (loop.outMs <= loop.inMs) return;
-    if (currentMs >= loop.outMs) {
-      const v = videoRef.current;
-      if (v) v.currentTime = loop.inMs / 1000;
-    }
-  }, [currentMs, loop]);
-
   // Transport keyboard handler.
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -169,24 +152,6 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
     if (v.paused) void v.play();
     else v.pause();
   }, []);
-
-  // Stable setIn/setOut that read currentTime straight off the video element
-  // — that lets the keydown effect depend on them without re-registering on
-  // every rAF tick (which would happen if we closed over the currentMs state).
-  const setIn = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    setLoop((p) => ({ ...p, inMs: v.currentTime * 1000 }));
-  }, []);
-  const setOut = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    setLoop((p) => ({ ...p, outMs: v.currentTime * 1000 }));
-  }, []);
-  const clearLoop = useCallback(
-    () => setLoop({ inMs: null, outMs: null, enabled: false }),
-    [],
-  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -244,67 +209,67 @@ export const HLSPlayer = forwardRef<HLSPlayerHandle, Props>(function HLSPlayer(
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // I/O are reserved for the in-progress log keyboard handler in Studio
-    // (FE7) — the loop-region buttons still work via mouse click.
   }, [frameRate, togglePlay]);
 
+  const statusLabel =
+    shuttle === 'reverse' ? '◀◀ J 2x' : playing ? '▶ play' : '⏸ paused';
+
   return (
-    <Stack>
-      <div style={{ background: '#000', position: 'relative' }}>
+    <Stack gap={4}>
+      {/* Video stripped of native controls — seeking lives on the timeline
+          below, transport on the keyboard. Click-to-toggle-play on the video
+          itself keeps the basic case discoverable. */}
+      <div
+        style={{ background: '#000', position: 'relative', cursor: 'pointer' }}
+        onClick={togglePlay}
+      >
         <video
           ref={videoRef}
-          controls
           style={{ width: '100%', maxHeight: 540, display: 'block' }}
+          playsInline
         />
       </div>
 
-      <Group gap="md">
-        <Code style={{ fontSize: 16 }}>{msToWallTC(currentMs, startedAtTC, frameRate)}</Code>
-        <Text c="dimmed" size="sm">
-          ({msToRelativeTC(currentMs, frameRate)} of{' '}
-          {durationMs > 0 ? msToRelativeTC(durationMs, frameRate) : '—'})
-        </Text>
-        <Badge color={playing ? 'scoreplay-green' : 'gray'} variant="light">
-          {shuttle === 'reverse' ? '◀◀ J 2x' : playing ? '▶ play' : '⏸ paused'}
-        </Badge>
-      </Group>
-
-      <Group gap="xs">
-        <ActionIcon variant="default" onClick={setIn} aria-label="set loop in">
-          I
-        </ActionIcon>
-        <ActionIcon variant="default" onClick={setOut} aria-label="set loop out">
-          O
-        </ActionIcon>
-        <Switch
-          checked={loop.enabled}
-          onChange={(e) =>
-            setLoop((p) => ({ ...p, enabled: e.currentTarget.checked }))
-          }
-          label="Loop"
-          disabled={loop.inMs === null || loop.outMs === null}
-        />
-        {(loop.inMs !== null || loop.outMs !== null) && (
-          <Text size="sm" c="dimmed">
-            in {loop.inMs !== null ? msToRelativeTC(loop.inMs, frameRate) : '—'} ·
-            out {loop.outMs !== null ? msToRelativeTC(loop.outMs, frameRate) : '—'}
+      {/* Single-line HUD: wall TC + relative TC + status pill + tiny help. */}
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <Group gap="xs" wrap="nowrap">
+          <Code style={{ fontSize: 14, padding: '2px 6px' }}>
+            {msToWallTC(currentMs, startedAtTC, frameRate)}
+          </Code>
+          <Text size="xs" c="dimmed" ff="monospace">
+            {msToRelativeTC(currentMs, frameRate)}
+            {durationMs > 0 ? ` / ${msToRelativeTC(durationMs, frameRate)}` : ''}
           </Text>
-        )}
-        {(loop.inMs !== null || loop.outMs !== null) && (
-          <ActionIcon variant="subtle" color="red" onClick={clearLoop} aria-label="clear loop">
-            ×
-          </ActionIcon>
-        )}
+        </Group>
+        <Group gap="xs" wrap="nowrap">
+          <Badge color={playing ? 'scoreplay-green' : 'gray'} variant="light" size="sm">
+            {statusLabel}
+          </Badge>
+          <Tooltip
+            multiline
+            w={260}
+            label={
+              'Space play/pause · J/K/L shuttle (-2x/pause/+2x) · ←/→ frame step · Shift+←/→ ±5s · click anywhere on the timeline to seek.'
+            }
+          >
+            <Text
+              c="dimmed"
+              size="xs"
+              style={{
+                cursor: 'help',
+                padding: '0 4px',
+                border: '1px solid #2a2a2a',
+                borderRadius: 3,
+              }}
+            >
+              ?
+            </Text>
+          </Tooltip>
+        </Group>
       </Group>
-
-      <Text size="xs" c="dimmed">
-        Transport: <Code>Space</Code> play/pause · <Code>J</Code>/<Code>K</Code>/<Code>L</Code> shuttle
-        (-2x/pause/+2x) · <Code>←</Code>/<Code>→</Code> frame step · <Code>Shift</Code>+arrows ±5s.
-        Loop region: click the <Code>I</Code> / <Code>O</Code> buttons above.
-      </Text>
 
       {error && (
-        <Text c="red" size="sm">
+        <Text c="red" size="xs">
           {error}
         </Text>
       )}

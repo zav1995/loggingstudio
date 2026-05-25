@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Box, Stack, Text } from '@mantine/core';
 
 import type { Log, Tag, TagGroup } from '../api/schemas';
@@ -17,8 +17,20 @@ type Props = {
   onSelect: (logID: string) => void;
 };
 
-const TRACK_HEIGHT = 56;
+const RULER_HEIGHT = 18;
+const TRACK_HEIGHT = 64;
 const POINT_LOG_PX = 3;
+
+// tickIntervalMs returns the ms-step between tick marks for a given total
+// duration — chosen so a 1080-wide timeline has roughly 8–15 ticks across.
+function tickIntervalMs(durationMs: number): number {
+  if (durationMs <= 0) return 60_000;
+  if (durationMs < 5 * 60_000) return 30_000; // < 5 min → every 30s
+  if (durationMs < 30 * 60_000) return 60_000; // < 30 min → every 1 min
+  if (durationMs < 60 * 60_000) return 5 * 60_000; // < 1 h → every 5 min
+  if (durationMs < 3 * 3600_000) return 10 * 60_000; // < 3 h → every 10 min
+  return 30 * 60_000; // very long → every 30 min
+}
 
 export function Timeline({
   logs,
@@ -31,6 +43,10 @@ export function Timeline({
   onSeek,
   onSelect,
 }: Props) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [hoverMs, setHoverMs] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState<number>(0);
+
   // If the player hasn't reported a duration yet, fall back to the latest
   // log's out (or in) so the timeline still renders something usable.
   const effectiveDuration = useMemo(() => {
@@ -43,18 +59,67 @@ export function Timeline({
     return Math.max(maxMs, 60_000);
   }, [durationMs, logs]);
 
+  const ticks = useMemo(() => {
+    const step = tickIntervalMs(effectiveDuration);
+    const out: number[] = [];
+    for (let t = 0; t <= effectiveDuration; t += step) {
+      out.push(t);
+    }
+    return out;
+  }, [effectiveDuration]);
+
   const onTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
     onSeek(Math.max(0, Math.min(effectiveDuration, ratio * effectiveDuration)));
   };
 
+  const onTrackMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / rect.width));
+    setHoverX(x);
+    setHoverMs(ratio * effectiveDuration);
+  };
+
+  const onTrackLeave = () => setHoverMs(null);
+
   const playheadLeft = `${(currentMs / effectiveDuration) * 100}%`;
 
   return (
-    <Stack gap={4}>
+    <Stack gap={2}>
+      {/* Ruler: tick marks + TC labels. */}
       <Box
+        style={{
+          position: 'relative',
+          height: RULER_HEIGHT,
+          color: '#666',
+          fontSize: 10,
+          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+          userSelect: 'none',
+        }}
+      >
+        {ticks.map((t) => (
+          <span
+            key={t}
+            style={{
+              position: 'absolute',
+              left: `${(t / effectiveDuration) * 100}%`,
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {msToRelativeTC(t, frameRate)}
+          </span>
+        ))}
+      </Box>
+
+      {/* Main track: log bars + playhead + ticks + hover indicator. */}
+      <Box
+        ref={trackRef}
         onClick={onTrackClick}
+        onMouseMove={onTrackMove}
+        onMouseLeave={onTrackLeave}
         style={{
           position: 'relative',
           height: TRACK_HEIGHT,
@@ -65,6 +130,22 @@ export function Timeline({
           overflow: 'hidden',
         }}
       >
+        {/* Vertical tick lines at the top edge of the track. */}
+        {ticks.map((t) => (
+          <Box
+            key={`tick-${t}`}
+            style={{
+              position: 'absolute',
+              left: `${(t / effectiveDuration) * 100}%`,
+              top: 0,
+              width: 1,
+              height: 6,
+              background: '#3a3a3a',
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+
         {logs.map((log) => {
           const color = logColor(log, tags, groups);
           const left = (log.offset_in / effectiveDuration) * 100;
@@ -89,7 +170,7 @@ export function Timeline({
               }`}
               style={{
                 position: 'absolute',
-                top: 6,
+                top: 10,
                 bottom: 6,
                 left: `${left}%`,
                 width: widthPct !== null ? `${widthPct}%` : POINT_LOG_PX,
@@ -102,7 +183,44 @@ export function Timeline({
             />
           );
         })}
-        {/* playhead */}
+
+        {/* Hover indicator: a light line + a floating TC chip above. */}
+        {hoverMs !== null && (
+          <>
+            <Box
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: hoverX,
+                width: 1,
+                background: 'rgba(250,250,250,0.4)',
+                pointerEvents: 'none',
+              }}
+            />
+            <Box
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: hoverX,
+                transform: 'translateX(-50%)',
+                padding: '2px 6px',
+                background: 'rgba(10,10,10,0.92)',
+                color: '#FAFAFA',
+                fontSize: 11,
+                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                borderRadius: 3,
+                border: '1px solid #2a2a2a',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {msToRelativeTC(hoverMs, frameRate)}
+            </Box>
+          </>
+        )}
+
+        {/* Playhead. */}
         <Box
           style={{
             position: 'absolute',
@@ -115,9 +233,10 @@ export function Timeline({
           }}
         />
       </Box>
+
       <Text size="xs" c="dimmed">
-        {logs.length} log{logs.length === 1 ? '' : 's'} · click an empty area to
-        seek · click a bar to select
+        {logs.length} log{logs.length === 1 ? '' : 's'} · click empty to seek ·
+        hover for TC · click a bar to select
       </Text>
     </Stack>
   );

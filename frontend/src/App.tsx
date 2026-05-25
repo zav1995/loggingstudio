@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { AppShell, Badge, Button, Group, NavLink, Title } from '@mantine/core';
+import { AppShell, Badge, Burger, Button, Group, NavLink, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { Link, Outlet, useLocation } from 'react-router-dom';
@@ -21,6 +21,10 @@ export function App() {
   const location = useLocation();
   const [activeMediaID] = useActiveMediaId();
   const [dialogOpen, { open: openDialog, close: closeDialog }] = useDisclosure(false);
+  // Sidebar collapse: starts open. On mobile, Mantine's breakpoint logic
+  // handles open/close separately; the desktop flag below maps to the
+  // burger toggle.
+  const [navOpen, { toggle: toggleNav }] = useDisclosure(true);
 
   // Auto-open the dialog once on first load if no media is set. Subsequent
   // dismissals stick — the user can re-open from the header button.
@@ -56,21 +60,34 @@ export function App() {
 
   return (
     <AppShell
-      header={{ height: 56 }}
-      navbar={{ width: 220, breakpoint: 'sm' }}
-      padding="md"
+      header={{ height: 48 }}
+      navbar={{
+        width: 200,
+        breakpoint: 'sm',
+        collapsed: { mobile: !navOpen, desktop: !navOpen },
+      }}
+      padding="sm"
     >
       <AppShell.Header
-        px="md"
+        px="sm"
         style={{ display: 'flex', alignItems: 'center', background: '#161616' }}
       >
-        <Group justify="space-between" w="100%">
-          <Title order={4} c="white">
-            Logging Studio
-          </Title>
-          <Group gap="xs">
+        <Group justify="space-between" w="100%" gap="sm" wrap="nowrap">
+          <Group gap="xs" wrap="nowrap">
+            <Burger
+              opened={navOpen}
+              onClick={toggleNav}
+              size="sm"
+              aria-label="toggle sidebar"
+            />
+            <Title order={5} c="white">
+              Logging Studio
+            </Title>
+          </Group>
+          <Group gap="xs" wrap="nowrap">
             <Badge
               variant="dot"
+              size="sm"
               color={
                 sseStatus === 'connected'
                   ? 'scoreplay-green'
@@ -83,11 +100,11 @@ export function App() {
               live
             </Badge>
             {activeMediaID ? (
-              <Badge color="scoreplay-green" variant="light" maw={260} style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <Badge color="scoreplay-green" variant="light" size="sm" maw={260} style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {activeMediaID}
               </Badge>
             ) : (
-              <Badge color="gray" variant="light">
+              <Badge color="gray" variant="light" size="sm">
                 no active media
               </Badge>
             )}
@@ -97,7 +114,7 @@ export function App() {
           </Group>
         </Group>
       </AppShell.Header>
-      <AppShell.Navbar p="sm">
+      <AppShell.Navbar p="xs">
         {navItems.map((item) => (
           <NavLink
             key={item.to}

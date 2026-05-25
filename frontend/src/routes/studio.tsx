@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Badge, Grid, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { Alert, Grid, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { z } from 'zod';
 
 import { ApiError, api } from '../api/client';
@@ -436,27 +436,23 @@ export function Studio() {
   }
 
   return (
-    <Stack>
-      <Group gap="sm" justify="space-between">
-        <Group gap="sm">
-          <Title order={2}>Studio</Title>
-          <Badge color="scoreplay-green" variant="light">
-            {media.data.id}
-          </Badge>
-          <Text size="sm" c="dimmed">
+    <Stack gap="xs">
+      <Group gap="xs" justify="space-between" wrap="nowrap">
+        <Group gap="xs" wrap="nowrap">
+          <Text size="xs" c="dimmed">
             {media.data.frame_rate} fps · anchored at {media.data.started_at_tc}
           </Text>
         </Group>
         {loadError && (
-          <Text c="red" size="sm">
+          <Text c="red" size="xs">
             {loadError}
           </Text>
         )}
       </Group>
 
-      <Grid gutter="md">
-        <Grid.Col span={{ base: 12, md: 8 }}>
-          <Stack>
+      <Grid gutter="xs">
+        <Grid.Col span={{ base: 12, md: 9 }}>
+          <Stack gap={4}>
             <HLSPlayer
               ref={playerRef}
               src={media.data.hls_url}
@@ -487,7 +483,7 @@ export function Studio() {
             />
           </Stack>
         </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 4 }}>
+        <Grid.Col span={{ base: 12, md: 3 }}>
           <LogList
             logs={filteredLogs}
             tags={tags}

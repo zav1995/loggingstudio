@@ -1,14 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActionIcon,
   Badge,
   Card,
+  Collapse,
   Group,
   ScrollArea,
   Select,
   Stack,
   Text,
-  Title,
   Tooltip,
 } from '@mantine/core';
 
@@ -67,43 +67,72 @@ export function LogList({
     [sessions],
   );
 
+  const activeFilterCount =
+    (filters.tagID ? 1 : 0) +
+    (filters.source ? 1 : 0) +
+    (filters.sessionID ? 1 : 0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   return (
-    <Card withBorder padding="sm" radius="md" bg="#161616" h="100%">
-      <Stack gap="sm" h="100%">
-        <Group justify="space-between">
-          <Title order={5}>Logs</Title>
-          <Badge variant="default" color="gray">
-            {logs.length}
-          </Badge>
+    <Card withBorder padding="xs" radius="md" bg="#161616" h="100%">
+      <Stack gap={6} h="100%">
+        <Group justify="space-between" gap="xs" wrap="nowrap">
+          <Group gap={6} wrap="nowrap">
+            <Text size="sm" fw={600}>
+              Logs
+            </Text>
+            <Badge variant="default" color="gray" size="sm">
+              {logs.length}
+            </Badge>
+          </Group>
+          <ActionIcon
+            variant={activeFilterCount > 0 ? 'light' : 'subtle'}
+            color={activeFilterCount > 0 ? 'scoreplay-green' : 'gray'}
+            size="sm"
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-label="toggle filters"
+            title={`${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`}
+          >
+            ▾
+          </ActionIcon>
         </Group>
-        <Stack gap="xs">
-          <Select
-            placeholder="Filter by tag"
-            data={tagOptions}
-            value={filters.tagID}
-            onChange={(v) => onFiltersChange({ ...filters, tagID: v })}
-            clearable
-            searchable
-          />
-          <Select
-            placeholder="Filter by source"
-            data={sourceOptions}
-            value={filters.source}
-            onChange={(v) => onFiltersChange({ ...filters, source: v })}
-            clearable
-          />
-          <Select
-            placeholder="Filter by session"
-            data={sessionOptions}
-            value={filters.sessionID}
-            onChange={(v) => onFiltersChange({ ...filters, sessionID: v })}
-            clearable
-            searchable
-          />
-        </Stack>
-        <ScrollArea h={520} type="hover" offsetScrollbars>
-          <Stack gap="xs">
-            {logs.length === 0 && <Text c="dimmed" size="sm">No logs.</Text>}
+        <Collapse in={filtersOpen}>
+          <Stack gap={4}>
+            <Select
+              size="xs"
+              placeholder="tag"
+              data={tagOptions}
+              value={filters.tagID}
+              onChange={(v) => onFiltersChange({ ...filters, tagID: v })}
+              clearable
+              searchable
+            />
+            <Select
+              size="xs"
+              placeholder="source"
+              data={sourceOptions}
+              value={filters.source}
+              onChange={(v) => onFiltersChange({ ...filters, source: v })}
+              clearable
+            />
+            <Select
+              size="xs"
+              placeholder="session"
+              data={sessionOptions}
+              value={filters.sessionID}
+              onChange={(v) => onFiltersChange({ ...filters, sessionID: v })}
+              clearable
+              searchable
+            />
+          </Stack>
+        </Collapse>
+        <ScrollArea h={620} type="hover" offsetScrollbars>
+          <Stack gap={4}>
+            {logs.length === 0 && (
+              <Text c="dimmed" size="xs">
+                No logs.
+              </Text>
+            )}
             {logs.map((log) => (
               <LogRow
                 key={log.id}
@@ -147,60 +176,66 @@ function LogRow({
   const extraTagCount = Math.max(0, log.tags.length - tagNames.length);
 
   return (
-    <Card
-      withBorder
-      padding="xs"
-      radius="sm"
+    <div
       onClick={() => log.id && onSelect(log.id)}
       style={{
         cursor: 'pointer',
         background: selected ? '#1a1a1a' : '#101010',
-        borderColor: selected ? '#FAFAFA' : '#2a2a2a',
-        borderLeft: `4px solid ${color}`,
+        borderTop: '1px solid #232323',
+        borderBottom: '1px solid #232323',
+        borderRight: selected ? '1px solid #FAFAFA' : '1px solid #232323',
+        borderLeft: `3px solid ${color}`,
+        padding: '4px 6px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
       }}
     >
-      <Stack gap={2}>
-        <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Text size="sm" ff="monospace">
-            {msToRelativeTC(log.offset_in, frameRate)}
-            {log.offset_out !== null && log.offset_out !== undefined
-              ? ` → ${msToRelativeTC(log.offset_out, frameRate)}`
-              : ''}
+      <Group gap={6} justify="space-between" wrap="nowrap">
+        <Text size="xs" ff="monospace">
+          {msToRelativeTC(log.offset_in, frameRate)}
+          {log.offset_out !== null && log.offset_out !== undefined
+            ? ` → ${msToRelativeTC(log.offset_out, frameRate)}`
+            : ''}
+        </Text>
+        <Group gap={2} wrap="nowrap">
+          <Text size="9px" c="dimmed" style={{ fontSize: 9 }}>
+            {log.source}
           </Text>
-          <Group gap={4} wrap="nowrap">
-            <Badge size="xs" variant="default" color="gray">
-              {log.source}
-            </Badge>
-            <Tooltip label="Edit">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                aria-label="edit log"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (log.id) onEdit(log.id);
-                }}
-              >
-                ✎
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+          <Tooltip label="Edit">
+            <ActionIcon
+              size="xs"
+              variant="subtle"
+              aria-label="edit log"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (log.id) onEdit(log.id);
+              }}
+            >
+              ✎
+            </ActionIcon>
+          </Tooltip>
         </Group>
-        {(tagNames.length > 0 || extraTagCount > 0) && (
-          <Group gap={4}>
-            {tagNames.map((n) => (
-              <Badge key={n} size="xs" variant="light">
-                {n}
-              </Badge>
-            ))}
-            {extraTagCount > 0 && (
-              <Text size="xs" c="dimmed">
-                +{extraTagCount}
-              </Text>
-            )}
-          </Group>
-        )}
-      </Stack>
-    </Card>
+      </Group>
+      {(tagNames.length > 0 || extraTagCount > 0) && (
+        <Group gap={3}>
+          {tagNames.map((n) => (
+            <Badge
+              key={n}
+              size="xs"
+              variant="light"
+              styles={{ root: { height: 14, padding: '0 4px', fontSize: 9 } }}
+            >
+              {n}
+            </Badge>
+          ))}
+          {extraTagCount > 0 && (
+            <Text size="9px" c="dimmed" style={{ fontSize: 9 }}>
+              +{extraTagCount}
+            </Text>
+          )}
+        </Group>
+      )}
+    </div>
   );
 }
