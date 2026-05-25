@@ -15,6 +15,12 @@ SELECT * FROM tags
 WHERE group_id = $1
 ORDER BY display_order ASC, name ASC;
 
+-- name: GetTagByName :one
+SELECT * FROM tags
+WHERE name = $1
+ORDER BY display_order ASC
+LIMIT 1;
+
 -- name: UpdateTag :one
 UPDATE tags SET
   group_id      = COALESCE(sqlc.narg('group_id')::uuid,    group_id),

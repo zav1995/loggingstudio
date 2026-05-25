@@ -61,6 +61,7 @@ func (s *Server) Register(r *gin.Engine) {
 	r.GET("/parsers/:id", s.getParser)
 	r.PATCH("/parsers/:id", s.updateParser)
 	r.DELETE("/parsers/:id", s.deleteParser)
+	r.POST("/parsers/:id/test", s.testParser)
 
 	r.GET("/events", s.sseEvents)
 }

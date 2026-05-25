@@ -70,6 +70,27 @@ func (q *Queries) GetTag(ctx context.Context, id pgtype.UUID) (Tag, error) {
 	return i, err
 }
 
+const getTagByName = `-- name: GetTagByName :one
+SELECT id, group_id, name, hotkey, display_order, created_at FROM tags
+WHERE name = $1
+ORDER BY display_order ASC
+LIMIT 1
+`
+
+func (q *Queries) GetTagByName(ctx context.Context, name string) (Tag, error) {
+	row := q.db.QueryRow(ctx, getTagByName, name)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.Name,
+		&i.Hotkey,
+		&i.DisplayOrder,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listTags = `-- name: ListTags :many
 SELECT id, group_id, name, hotkey, display_order, created_at FROM tags
 ORDER BY display_order ASC, name ASC
